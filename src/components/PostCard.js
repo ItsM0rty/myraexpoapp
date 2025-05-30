@@ -9,12 +9,12 @@ import {
   StyleSheet,
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
-import { MessageCircle, Send, Heart } from 'lucide-react-native';
+import { MessageCircle, Send } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 
-// Import SVGs (comment these out if SVG issues persist)
-// import LikeIcon from '../../assets/like-icon.svg';
-// import LikedIcon from '../../assets/liked-icon.svg';
+// Import SVG icons
+import LikeIcon from '../../assets/like-icon.svg';
+import LikedIcon from '../../assets/liked-icon.svg';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -88,31 +88,37 @@ export default function PostCard(props) {
     }
   };
 
-  const handleLikePress = () => {
-    if (!liked) {
-      // Liking the post - play animation
-      setIsAnimating(true);
-      
-      if (lottieRef.current) {
-        lottieRef.current?.reset();
-        lottieRef.current?.play();
-      }
-      
-      // Set liked to true after a short delay to let animation start
-      setTimeout(() => {
-        setLiked(true);
-      }, 50);
-      
-      // Stop animation after it completes
-      setTimeout(() => {
-        setIsAnimating(false);
-      }, 1200);
-    } else {
-      // Unliking the post
-      setLiked(false);
-      setIsAnimating(false);
+const handleLikePress = () => {
+  if (!liked) {
+    // Liking the post
+    setIsAnimating(true);
+    
+    // Reset and play animation
+    if (lottieRef.current) {
+      lottieRef.current?.reset();
+      lottieRef.current?.play();
     }
-  };
+    
+    // Set liked state after a brief delay to ensure animation starts
+    setTimeout(() => {
+      setLiked(true);
+    }, 50);
+    
+    // Stop animation after it completes
+    setTimeout(() => {
+      setIsAnimating(false);
+    }, 1200);
+  } else {
+    // Unliking the post - reset everything immediately
+    setIsAnimating(false);
+    setLiked(false);
+    
+    // Ensure lottie animation is reset when unliking
+    if (lottieRef.current) {
+      lottieRef.current?.reset();
+    }
+  }
+};
 
   const imageWidth = screenWidth - 32; // Account for horizontal padding
   const imageHeight = imageWidth * 1.25; // 125% aspect ratio
@@ -189,10 +195,9 @@ export default function PostCard(props) {
             >
               {/* Static like icon - hidden when animating or liked */}
               {!isAnimating && !liked && (
-                <Heart
-                  size={28}
-                  color="#121330"
-                  strokeWidth={1.5}
+                <LikeIcon
+                  width={28}
+                  height={28}
                 />
               )}
               
@@ -209,11 +214,9 @@ export default function PostCard(props) {
               
               {/* Liked icon - only show when liked and not animating */}
               {liked && !isAnimating && (
-                <Heart
-                  size={28}
-                  color="#ff3040"
-                  fill="#ff3040"
-                  strokeWidth={1.5}
+                <LikedIcon
+                  width={28}
+                  height={28}
                 />
               )}
             </TouchableOpacity>
