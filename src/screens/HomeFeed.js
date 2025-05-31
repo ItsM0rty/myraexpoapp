@@ -17,6 +17,7 @@ const AnimatedPagerView = Animated.createAnimatedComponent(PagerView);
 
 export default function HomeFeed() {
   const [tab, setTab] = useState('myfeed');
+  const [pagerScrollEnabled, setPagerScrollEnabled] = useState(true);
   const pagerRef = useRef(null);
   
   // Animation values for pill
@@ -32,14 +33,11 @@ export default function HomeFeed() {
   const onPageScroll = (event) => {
     const { offset, position } = event.nativeEvent;
     
-    // Smoothly animate pill based on scroll position
-    if (position === 0) {
-      const progress = Math.max(0, Math.min(1, offset));
+    // Only animate pill during continuous scroll between pages 0 and 1
+    if (position === 0 && offset >= 0 && offset <= 1) {
+      const progress = offset;
       const pillPosition = leftPillPosition + (rightPillPosition - leftPillPosition) * progress;
       tabIndicatorX.setValue(pillPosition);
-    } else if (position === 1) {
-      // Ensure pill stays on right when on dailies page
-      tabIndicatorX.setValue(rightPillPosition);
     }
   };
 
@@ -48,17 +46,33 @@ export default function HomeFeed() {
     const newTab = pageIndex === 0 ? 'myfeed' : 'dailies';
     setTab(newTab);
     
-    // Ensure pill is in correct position
+    // Smoothly animate pill to final position
     const finalPosition = pageIndex === 0 ? leftPillPosition : rightPillPosition;
-    tabIndicatorX.setValue(finalPosition);
+    Animated.timing(tabIndicatorX, {
+      toValue: finalPosition,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
   };
 
   const switchTab = (newTab) => {
     if (newTab === tab) return;
     
     const pageIndex = newTab === 'myfeed' ? 0 : 1;
-    pagerRef.current?.setPage(pageIndex);
-    setTab(newTab);
+    const targetPosition = pageIndex === 0 ? leftPillPosition : rightPillPosition;
+    
+    // Animate pill smoothly to target position
+    Animated.timing(tabIndicatorX, {
+      toValue: targetPosition,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+    
+    // Change page with slight delay to sync with pill animation
+    setTimeout(() => {
+      pagerRef.current?.setPage(pageIndex);
+      setTab(newTab);
+    }, 50);
   };
 
   const myFeedPosts = [
@@ -200,7 +214,7 @@ export default function HomeFeed() {
         onPageScroll={onPageScroll}
         onPageSelected={onPageSelected}
         overdrag={false}
-        scrollEnabled={true}
+        scrollEnabled={pagerScrollEnabled}
       >
         {/* My Feed Section */}
         <View key="myfeed" style={styles.feedSection}>
@@ -209,6 +223,7 @@ export default function HomeFeed() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             scrollEventThrottle={16}
+            nestedScrollEnabled={true}
           >
             {myFeedPosts.map((post, i) => (
               <PostCard key={`feed-${i}`} {...post} />
@@ -223,6 +238,7 @@ export default function HomeFeed() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             scrollEventThrottle={16}
+            nestedScrollEnabled={true}
           >
             {dailiesPosts.map((post, i) => (
               <PostCard key={`dailies-${i}`} {...post} isDaily />

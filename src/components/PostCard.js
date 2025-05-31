@@ -175,7 +175,15 @@ export default function PostCard(props) {
   return (
     <View style={styles.container}>
       {/* Image section */}
-      <PanGestureHandler onGestureEvent={onSwipeGesture} onHandlerStateChange={onSwipeGesture}>
+      <PanGestureHandler 
+        onGestureEvent={onSwipeGesture} 
+        onHandlerStateChange={onSwipeGesture}
+        activeOffsetX={[-5, 5]} // More sensitive to horizontal movement
+        failOffsetY={[-10, 10]} // Less sensitive to vertical movement
+        shouldCancelWhenOutside={false} // Don't cancel when moving outside
+        enabled={images.length > 1}
+        simultaneousHandlers={[]} // Don't allow simultaneous handlers
+      >
         <Animated.View 
           style={[styles.imageContainer, { height: imageHeight }]}
         >
