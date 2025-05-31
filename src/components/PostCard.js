@@ -7,8 +7,9 @@ import {
   Animated,
   Dimensions,
   StyleSheet,
+  TouchableWithoutFeedback,
 } from 'react-native';
-import { PanGestureHandler, State } from 'react-native-gesture-handler';
+import { PanGestureHandler, State, TapGestureHandler } from 'react-native-gesture-handler';
 import { MessageCircle, Send } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 
@@ -33,9 +34,12 @@ export default function PostCard(props) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [liked, setLiked] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isDoubleTapAnimating, setIsDoubleTapAnimating] = useState(false);
   
   const slideAnim = useRef(new Animated.Value(0)).current;
   const lottieRef = useRef();
+  const doubleTapLottieRef = useRef();
+  const doubleTapOpacity = useRef(new Animated.Value(0)).current;
 
   // Function to format counter numbers (only show first 2 digits, don't round up)
   const formatCounter = (count) => {
@@ -54,131 +58,198 @@ export default function PostCard(props) {
     }
   };
 
-  const handleSwipe = (direction) => {
-    if (images.length > 1) {
-      let nextIndex;
-      if (direction === 'left') {
-        nextIndex = (currentImageIndex + 1) % images.length;
-      } else {
-        nextIndex = currentImageIndex === 0 ? images.length - 1 : currentImageIndex - 1;
-      }
-      setCurrentImageIndex(nextIndex);
+  const imageWidth = screenWidth - 32; // Account for horizontal padding
+  const imageHeight = imageWidth * (8/6); // 6:8 aspect ratio (width:height)
+
+  const onSwipeGesture = (event) => {
+    const { translationX, state, velocityX } = event.nativeEvent;
+    
+    if (state === State.ACTIVE) {
+      // During active swipe, move the carousel based on gesture
+      const newTranslateX = -currentImageIndex * imageWidth + translationX;
       
-      Animated.spring(slideAnim, {
-        toValue: -nextIndex * (screenWidth - 32), // 32 is total horizontal padding
+      // Apply rubber band effect at boundaries
+      let boundedTranslateX = newTranslateX;
+      const minTranslate = -(images.length - 1) * imageWidth;
+      const maxTranslate = 0;
+      
+      if (newTranslateX > maxTranslate) {
+        // Rubber band effect on the left (first image)
+        const overscroll = newTranslateX - maxTranslate;
+        boundedTranslateX = maxTranslate + overscroll * 0.3;
+      } else if (newTranslateX < minTranslate) {
+        // Rubber band effect on the right (last image)
+        const overscroll = minTranslate - newTranslateX;
+        boundedTranslateX = minTranslate - overscroll * 0.3;
+      }
+      
+      slideAnim.setValue(boundedTranslateX);
+    } else if (state === State.END) {
+      const threshold = imageWidth * 0.5; // 50% threshold
+      const swipeDistance = Math.abs(translationX);
+      const swipeVelocity = Math.abs(velocityX);
+      
+      let nextIndex = currentImageIndex;
+      
+      // Determine if we should change image based on distance or velocity
+      if (swipeDistance > threshold || swipeVelocity > 1000) {
+        if (translationX < 0 && currentImageIndex < images.length - 1) {
+          // Swiping left (next image)
+          nextIndex = currentImageIndex + 1;
+        } else if (translationX > 0 && currentImageIndex > 0) {
+          // Swiping right (previous image)
+          nextIndex = currentImageIndex - 1;
+        }
+      }
+      
+      // Animate to the target position
+      setCurrentImageIndex(nextIndex);
+      Animated.timing(slideAnim, {
+        toValue: -nextIndex * imageWidth,
+        duration: 300,
         useNativeDriver: true,
-        tension: 150,
-        friction: 10,
       }).start();
     }
   };
 
-  const onSwipeGesture = (event) => {
-    const { translationX, state } = event.nativeEvent;
-    
-    // Only handle gesture when it ends
-    if (state === State.END) {
-      if (Math.abs(translationX) > 50) { // Minimum swipe distance
-        if (translationX > 0) {
-          handleSwipe('right');
-        } else {
-          handleSwipe('left');
-        }
+  const handleLikePress = () => {
+    if (!liked) {
+      // Liking the post
+      setIsAnimating(true);
+      
+      // Reset and play animation
+      if (lottieRef.current) {
+        lottieRef.current?.reset();
+        lottieRef.current?.play();
+      }
+      
+      // Set liked state after a brief delay to ensure animation starts
+      setTimeout(() => {
+        setLiked(true);
+      }, 50);
+      
+      // Stop animation after it completes
+      setTimeout(() => {
+        setIsAnimating(false);
+      }, 1200);
+    } else {
+      // Unliking the post - reset everything immediately
+      setIsAnimating(false);
+      setLiked(false);
+      
+      // Ensure lottie animation is reset when unliking
+      if (lottieRef.current) {
+        lottieRef.current?.reset();
       }
     }
   };
 
-const handleLikePress = () => {
-  if (!liked) {
-    // Liking the post
-    setIsAnimating(true);
-    
-    // Reset and play animation
-    if (lottieRef.current) {
-      lottieRef.current?.reset();
-      lottieRef.current?.play();
-    }
-    
-    // Set liked state after a brief delay to ensure animation starts
-    setTimeout(() => {
+  const handleDoubleTap = () => {
+    if (!liked) {
+      // Like the post
       setLiked(true);
-    }, 50);
-    
-    // Stop animation after it completes
-    setTimeout(() => {
-      setIsAnimating(false);
-    }, 1200);
-  } else {
-    // Unliking the post - reset everything immediately
-    setIsAnimating(false);
-    setLiked(false);
-    
-    // Ensure lottie animation is reset when unliking
-    if (lottieRef.current) {
-      lottieRef.current?.reset();
+      setIsDoubleTapAnimating(true);
+      
+      // Show and animate the double tap heart
+      doubleTapOpacity.setValue(1);
+      
+      if (doubleTapLottieRef.current) {
+        doubleTapLottieRef.current?.reset();
+        doubleTapLottieRef.current?.play();
+      }
+      
+      // Fade out the animation after completion
+      setTimeout(() => {
+        Animated.timing(doubleTapOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => {
+          setIsDoubleTapAnimating(false);
+        });
+      }, 800);
     }
-  }
-};
+  };
 
-  const imageWidth = screenWidth - 32; // Account for horizontal padding
-  const imageHeight = imageWidth * 1.25; // 125% aspect ratio
 
   return (
     <View style={styles.container}>
       {/* Image section */}
-      <PanGestureHandler onHandlerStateChange={onSwipeGesture}>
+      <PanGestureHandler onGestureEvent={onSwipeGesture} onHandlerStateChange={onSwipeGesture}>
         <Animated.View 
           style={[styles.imageContainer, { height: imageHeight }]}
         >
-          {/* Profile picture overlay */}
-          <View style={styles.profileContainer}>
-            <View style={styles.profileImageContainer}>
-              <Image 
-                source={{ uri: profilePictureUrl }} 
-                style={styles.profileImage}
-              />
-            </View>
-          </View>
-
-          {/* Image carousel */}
-          <View style={styles.carouselContainer}>
-            <Animated.View
-              style={[
-                styles.imageRow,
-                {
-                  width: images.length * imageWidth,
-                  transform: [{ translateX: slideAnim }]
-                }
-              ]}
-            >
-              {images.map((image, index) => (
-                <View key={index} style={[styles.imageWrapper, { width: imageWidth }]}>
+          <TapGestureHandler numberOfTaps={2} onActivated={handleDoubleTap}>
+            <Animated.View style={styles.imageContainer}>
+              {/* Profile picture overlay */}
+              <View style={styles.profileContainer}>
+                <View style={styles.profileImageContainer}>
                   <Image 
-                    source={{ uri: image }} 
-                    style={styles.postImage}
-                    resizeMode="cover"
+                    source={{ uri: profilePictureUrl }} 
+                    style={styles.profileImage}
                   />
                 </View>
-              ))}
-            </Animated.View>
-          </View>
+              </View>
 
-          {/* Paginator dots */}
-          {images.length > 1 && (
-            <View style={styles.paginatorContainer}>
-              {images.map((_, index) => (
-                <View
-                  key={`dot-${index}`}
+              {/* Image carousel */}
+              <View style={styles.carouselContainer}>
+                <Animated.View
                   style={[
-                    styles.dot,
-                    index === currentImageIndex 
-                      ? styles.activeDot 
-                      : styles.inactiveDot
+                    styles.imageRow,
+                    {
+                      width: images.length * imageWidth,
+                      transform: [{ translateX: slideAnim }]
+                    }
                   ]}
-                />
-              ))}
-            </View>
-          )}
+                >
+                  {images.map((image, index) => (
+                    <View key={index} style={[styles.imageWrapper, { width: imageWidth }]}>
+                      <Image 
+                        source={{ uri: image }} 
+                        style={styles.postImage}
+                        resizeMode="cover"
+                      />
+                    </View>
+                  ))}
+                </Animated.View>
+              </View>
+
+              {/* Double tap heart animation */}
+              {isDoubleTapAnimating && (
+                <Animated.View 
+                  style={[
+                    styles.doubleTapHeartContainer,
+                    { opacity: doubleTapOpacity }
+                  ]}
+                >
+                  <LottieView
+                    ref={doubleTapLottieRef}
+                    source={require('../../assets/like-animation.json')}
+                    autoPlay={false}
+                    loop={false}
+                    style={styles.doubleTapHeart}
+                  />
+                </Animated.View>
+              )}
+
+              {/* Paginator dots */}
+              {images.length > 1 && (
+                <View style={styles.paginatorContainer}>
+                  {images.map((_, index) => (
+                    <View
+                      key={`dot-${index}`}
+                      style={[
+                        styles.dot,
+                        index === currentImageIndex 
+                          ? styles.activeDot 
+                          : styles.inactiveDot
+                      ]}
+                    />
+                  ))}
+                </View>
+              )}
+            </Animated.View>
+          </TapGestureHandler>
         </Animated.View>
       </PanGestureHandler>
 
@@ -188,38 +259,36 @@ const handleLikePress = () => {
         <View style={styles.actionsContainer}>
           {/* Like Button with Counter */}
           <View style={styles.actionItem}>
-            <TouchableOpacity 
-              onPress={handleLikePress} 
-              style={styles.actionButton}
-              activeOpacity={0.7}
-            >
-              {/* Static like icon - hidden when animating or liked */}
-              {!isAnimating && !liked && (
-                <LikeIcon
-                  width={28}
-                  height={28}
-                />
-              )}
-              
-              {/* Animation layer - always present but only visible when animating */}
-              <View style={[styles.animationContainer, { opacity: isAnimating ? 1 : 0 }]}>
-                <LottieView
-                  ref={lottieRef}
-                  source={require('../../assets/like-animation.json')}
-                  autoPlay={false}
-                  loop={false}
-                  style={styles.lottieAnimation}
-                />
+            <TouchableWithoutFeedback onPress={handleLikePress}>
+              <View style={styles.actionButton}>
+                {/* Static like icon - hidden when animating or liked */}
+                {!isAnimating && !liked && (
+                  <LikeIcon
+                    width={28}
+                    height={28}
+                  />
+                )}
+                
+                {/* Animation layer - always present but only visible when animating */}
+                <View style={[styles.animationContainer, { opacity: isAnimating ? 1 : 0 }]}>
+                  <LottieView
+                    ref={lottieRef}
+                    source={require('../../assets/like-animation.json')}
+                    autoPlay={false}
+                    loop={false}
+                    style={styles.lottieAnimation}
+                  />
+                </View>
+                
+                {/* Liked icon - only show when liked and not animating */}
+                {liked && !isAnimating && (
+                  <LikedIcon
+                    width={28}
+                    height={28}
+                  />
+                )}
               </View>
-              
-              {/* Liked icon - only show when liked and not animating */}
-              {liked && !isAnimating && (
-                <LikedIcon
-                  width={28}
-                  height={28}
-                />
-              )}
-            </TouchableOpacity>
+            </TouchableWithoutFeedback>
             {formatCounter(likes) !== '' && (
               <Text style={styles.counterText}>{formatCounter(likes)}</Text>
             )}
@@ -227,9 +296,11 @@ const handleLikePress = () => {
 
           {/* Comment Button with Counter */}
           <View style={styles.actionItem}>
-            <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-              <MessageCircle size={28} color="#121330" strokeWidth={1.5} />
-            </TouchableOpacity>
+            <TouchableWithoutFeedback>
+              <View style={styles.actionButton}>
+                <MessageCircle size={28} color="#121330" strokeWidth={1} />
+              </View>
+            </TouchableWithoutFeedback>
             {formatCounter(comments) !== '' && (
               <Text style={styles.counterText}>{formatCounter(comments)}</Text>
             )}
@@ -237,9 +308,11 @@ const handleLikePress = () => {
 
           {/* Share Button with Counter */}
           <View style={styles.actionItem}>
-            <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-              <Send size={28} color="#121330" strokeWidth={1.5} />
-            </TouchableOpacity>
+            <TouchableWithoutFeedback>
+              <View style={styles.actionButton}>
+                <Send size={28} color="#121330" strokeWidth={1} />
+              </View>
+            </TouchableWithoutFeedback>
             {formatCounter(shares) !== '' && (
               <Text style={styles.counterText}>{formatCounter(shares)}</Text>
             )}
@@ -268,6 +341,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     position: 'relative',
+    flex: 1,
   },
   profileContainer: {
     position: 'absolute',
@@ -305,10 +379,25 @@ const styles = StyleSheet.create({
   },
   imageWrapper: {
     height: '100%',
+    overflow: 'hidden',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   postImage: {
     width: '100%',
     height: '100%',
+  },
+  doubleTapHeartContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -40 }, { translateY: -40 }],
+    zIndex: 30,
+    pointerEvents: 'none',
+  },
+  doubleTapHeart: {
+    width: 80,
+    height: 80,
   },
   paginatorContainer: {
     position: 'absolute',
@@ -350,7 +439,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
-    marginTop: -8,
+    marginTop: -5, // Adjust this value to change gap above username/description
   },
   actionItem: {
     flexDirection: 'row',
@@ -379,9 +468,9 @@ const styles = StyleSheet.create({
   counterText: {
     fontSize: 14,
     color: '#000000',
-    fontWeight: '500',
+    fontWeight: 'bold',
     marginLeft: 4,
-    fontFamily: 'System',
+    fontFamily: 'Montserrat',
   },
   descriptionContainer: {
     marginTop: 4,
