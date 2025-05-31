@@ -12,6 +12,7 @@ import {
   PanResponder,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   MessageCircle,
   X,
@@ -28,9 +29,10 @@ export default function ProfilePage() {
   const [selectedPostIndex, setSelectedPostIndex] = useState(0);
   const [pressTimer, setPressTimer] = useState(null);
   const [isScrolling, setIsScrolling] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
   const feedScrollRef = useRef(null);
   const scrollTimeoutRef = useRef(null);
-  const slideAnim = useRef(new Animated.Value(screenWidth)).current;
+  const slideAnim = useRef(new Animated.Value(-screenWidth)).current;
 
   const userPosts = [
     {
@@ -132,61 +134,71 @@ export default function ProfilePage() {
     }, 150);
   };
 
-  const handlePostPress = (post, index) => {
+  const handlePostPressIn = (post, index) => {
     if (isScrolling) return;
     
     const timer = setTimeout(() => {
       setSelectedPost(post);
-    }, 500);
+      setIsHolding(true);
+    }, 200);
     setPressTimer(timer);
   };
 
-  const handlePostRelease = () => {
+  const handlePostPressOut = () => {
     if (pressTimer) {
       clearTimeout(pressTimer);
       setPressTimer(null);
     }
+    
+    // Reset holding state immediately if no preview is shown
+    if (!selectedPost) {
+      setIsHolding(false);
+    }
   };
 
-  const handlePostClick = (post, index) => {
+  const handlePostPress = (post, index) => {
     if (isScrolling) return;
     
-    setSelectedPostIndex(index);
-    setShowPostsFeed(true);
-    
-    // Animate slide in
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 150,
-      useNativeDriver: true,
-    }).start();
+    // Only proceed if we're not currently holding/showing preview
+    if (!isHolding && !selectedPost) {
+      setSelectedPostIndex(index);
+      setShowPostsFeed(true);
+      
+      // Animate slide in from left
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }).start();
+    }
   };
 
   const closeModal = () => {
     setSelectedPost(null);
+    setIsHolding(false);
   };
 
   const closeFeed = () => {
-    // Animate slide out
+    // Animate slide out to left
     Animated.timing(slideAnim, {
-      toValue: screenWidth,
+      toValue: -screenWidth,
       duration: 150,
       useNativeDriver: true,
     }).start(() => {
       setShowPostsFeed(false);
-      slideAnim.setValue(screenWidth);
+      slideAnim.setValue(-screenWidth);
     });
   };
 
   // Scroll to selected post when feed opens
   useEffect(() => {
     if (showPostsFeed && feedScrollRef.current) {
-      // Small delay to ensure the feed is rendered
+      // Delay to ensure the feed is rendered and prevent flashing
       setTimeout(() => {
-        const postHeight = 600; // Approximate height of a post
+        const postHeight = 650; // Approximate height of a post including margins
         const yOffset = selectedPostIndex * postHeight;
         feedScrollRef.current?.scrollTo({ y: yOffset, animated: false });
-      }, 100);
+      }, 200);
     }
   }, [showPostsFeed, selectedPostIndex]);
 
@@ -197,9 +209,9 @@ export default function ProfilePage() {
       <TouchableOpacity
         key={post.id}
         style={[styles.gridItem, { width: gridItemWidth, height: gridItemWidth * 1.25 }]}
-        onPressIn={() => handlePostPress(post, index)}
-        onPressOut={handlePostRelease}
-        onPress={() => handlePostClick(post, index)}
+        onPressIn={() => handlePostPressIn(post, index)}
+        onPressOut={handlePostPressOut}
+        onPress={() => handlePostPress(post, index)}
         activeOpacity={0.8}
       >
         <Image
@@ -219,7 +231,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
       
       <ScrollView
@@ -293,38 +305,41 @@ export default function ProfilePage() {
         animationType="none"
         transparent={true}
         onRequestClose={closeFeed}
+        statusBarTranslucent={true}
       >
-        <Animated.View
-          style={[
-            styles.feedModal,
-            {
-              transform: [{ translateX: slideAnim }],
-            },
-          ]}
-        >
-          {/* Feed Header */}
-          <View style={styles.feedHeader}>
-            <TouchableOpacity onPress={closeFeed} style={styles.backButton}>
-              <ArrowLeft size={24} color="white" />
-            </TouchableOpacity>
-            <Text style={styles.feedHeaderText}>@suyashbhattarai</Text>
-            <View style={styles.headerSpacer} />
-          </View>
-
-          {/* Scrollable Posts Feed */}
-          <ScrollView
-            ref={feedScrollRef}
-            style={styles.feedScrollView}
-            contentContainerStyle={styles.feedContent}
-            showsVerticalScrollIndicator={false}
+        <SafeAreaView style={styles.feedModalSafeArea} edges={['top', 'left', 'right']}>
+          <Animated.View
+            style={[
+              styles.feedModal,
+              {
+                transform: [{ translateX: slideAnim }],
+              },
+            ]}
           >
-            {sortedPosts.map((post, index) => (
-              <View key={`feed-${post.id}-${index}`} style={styles.feedPostContainer}>
-                <PostCard {...post} />
-              </View>
-            ))}
-          </ScrollView>
-        </Animated.View>
+            {/* Feed Header */}
+            <View style={styles.feedHeader}>
+              <TouchableOpacity onPress={closeFeed} style={styles.backButton}>
+                <ArrowLeft size={24} color="white" />
+              </TouchableOpacity>
+              <Text style={styles.feedHeaderText}>@suyashbhattarai</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+
+            {/* Scrollable Posts Feed */}
+            <ScrollView
+              ref={feedScrollRef}
+              style={styles.feedScrollView}
+              contentContainerStyle={styles.feedContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {sortedPosts.map((post, index) => (
+                <View key={`feed-${post.id}-${index}`} style={styles.feedPostContainer}>
+                  <PostCard {...post} />
+                </View>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        </SafeAreaView>
       </Modal>
 
       {/* Hold Preview Modal */}
@@ -333,27 +348,30 @@ export default function ProfilePage() {
         animationType="fade"
         transparent={true}
         onRequestClose={closeModal}
+        statusBarTranslucent={true}
       >
-        <TouchableOpacity
-          style={styles.previewModal}
-          activeOpacity={1}
-          onPress={closeModal}
-        >
-          <View style={styles.previewContainer}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={closeModal}
-            >
-              <X size={32} color="white" />
-            </TouchableOpacity>
-            
-            <View style={styles.previewPostContainer}>
-              {selectedPost && <PostCard {...selectedPost} />}
+        <SafeAreaView style={styles.previewModalSafeArea} edges={[]}>
+          <TouchableOpacity
+            style={styles.previewModal}
+            activeOpacity={1}
+            onPress={closeModal}
+          >
+            <View style={styles.previewContainer}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={closeModal}
+              >
+                <X size={32} color="white" />
+              </TouchableOpacity>
+              
+              <View style={styles.previewPostContainer}>
+                {selectedPost && <PostCard {...selectedPost} />}
+              </View>
             </View>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </SafeAreaView>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -366,7 +384,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 80,
+    paddingBottom: 20,
   },
   header: {
     alignItems: 'center',
@@ -500,6 +518,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  feedModalSafeArea: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
   feedModal: {
     flex: 1,
     backgroundColor: '#000000',
@@ -530,15 +552,18 @@ const styles = StyleSheet.create({
   feedContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 80,
+    paddingBottom: 20,
     gap: 16,
   },
   feedPostContainer: {
     marginBottom: 16,
   },
-  previewModal: {
+  previewModalSafeArea: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.9)',
+  },
+  previewModal: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,

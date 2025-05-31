@@ -15,7 +15,7 @@ import {
   ArrowLeft, 
   Zap, 
   ZapOff, 
-  Settings, 
+  Settings2, 
   RefreshCcw, 
   AlertTriangle,
   Image as ImageIcon,
@@ -23,8 +23,24 @@ import {
   Globe,
   Users
 } from 'lucide-react-native';
+import { 
+  Gesture, 
+  GestureDetector, 
+  GestureHandlerRootView 
+} from 'react-native-gesture-handler';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming, 
+  runOnJS 
+} from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
+
+// Aspect ratio constant for easy switching
+const ASPECT_RATIO = 6/8; // Change to 5/6 when needed
+
+
 
 export default function CameraScreen({ onBack }) {
   const [facing, setFacing] = useState('back');
@@ -36,7 +52,16 @@ export default function CameraScreen({ onBack }) {
   const [isVirtualDevice, setIsVirtualDevice] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const [zoom, setZoom] = useState(0);
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
   const cameraRef = useRef(null);
+  
+  // Pinch-to-zoom gesture values
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  
+  // Flash animation
+  const flashOpacity = useSharedValue(0);
 
   // Enhanced virtual device and emulator detection for mobile
   const detectVirtualDevice = async () => {
@@ -184,44 +209,103 @@ export default function CameraScreen({ onBack }) {
     initializeCamera();
   }, [permission]);
 
-  // Enhanced photo capture with validation
-  const capturePhoto = async () => {
-    if (!cameraRef.current || isCapturing || isVirtualDevice) return;
-    
-    setIsCapturing(true);
-    
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: false,
-        skipProcessing: false,
-      });
-
-      if (!photo || !photo.uri) {
-        throw new Error('Failed to capture photo');
-      }
-
-      // Additional validation: check image dimensions and file size
-      const imageInfo = await fetch(photo.uri, { method: 'HEAD' });
-      const contentLength = imageInfo.headers.get('content-length');
-      
-      if (contentLength && parseInt(contentLength) < 1000) {
-        throw new Error('Captured image appears to be invalid');
-      }
-
-      setCapturedImage(photo.uri);
-      
-    } catch (error) {
-      console.error('Photo capture error:', error);
-      setCameraError('Failed to capture photo. Please try again.');
-    }
-    
-    setIsCapturing(false);
+  // Convert scale to zoom value (0-1 range for expo-camera)
+  const scaleToZoom = (scaleValue) => {
+    // Map scale 1-5 to zoom 0-1, with more granular control
+    const clampedScale = Math.max(1, Math.min(5, scaleValue));
+    return (clampedScale - 1) / 4; // 0 to 1 range
   };
 
+  // Convert zoom to display value (1.0x to 5.0x)
+  const zoomToDisplay = (zoomValue) => {
+    return (zoomValue * 4 + 1).toFixed(1);
+  };
+
+  // Update zoom from gesture scale
+  const updateZoomFromScale = (newScale) => {
+    const newZoom = scaleToZoom(newScale);
+    setZoom(newZoom);
+  };
+
+  // Pinch gesture for zoom
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((event) => {
+      const newScale = savedScale.value * event.scale;
+      const clampedScale = Math.max(1, Math.min(5, newScale));
+      scale.value = clampedScale;
+      runOnJS(updateZoomFromScale)(clampedScale);
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+    });
+
+  // Trigger flash animation
+  const triggerFlash = () => {
+    flashOpacity.value = withTiming(0.3, { duration: 50 }, () => {
+      flashOpacity.value = withTiming(0, { duration: 200 });
+    });
+  };
+
+  // Flash animation style
+  const flashAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: flashOpacity.value,
+    };
+  });
+
+  // Enhanced photo capture with validation
+const capturePhoto = async () => {
+  if (!cameraRef.current || isCapturing || isVirtualDevice) return;
+  
+  setIsCapturing(true);
+  
+  // Trigger soft flash animation
+  triggerFlash();
+  
+  try {
+    const photo = await cameraRef.current.takePictureAsync({
+      quality: 0.8,
+      base64: false,
+      skipProcessing: false,
+      aspect: ASPECT_RATIO === 6/8 ? [6, 8] : ASPECT_RATIO === 4/5 ? [4, 5] : [5, 6],
+      shutterSound: false, // This disables the shutter sound completely
+    });
+
+    if (!photo || !photo.uri) {
+      throw new Error('Failed to capture photo');
+    }
+
+    // Additional validation: check image dimensions and file size
+    const imageInfo = await fetch(photo.uri, { method: 'HEAD' });
+    const contentLength = imageInfo.headers.get('content-length');
+    
+    if (contentLength && parseInt(contentLength) < 1000) {
+      throw new Error('Captured image appears to be invalid');
+    }
+
+    setCapturedImage(photo.uri);
+    
+  } catch (error) {
+    console.error('Photo capture error:', error);
+    setCameraError('Failed to capture photo. Please try again.');
+  }
+  
+  setIsCapturing(false);
+};
+
+
   const switchCamera = () => {
-    if (!isVirtualDevice) {
+    if (!isVirtualDevice && !isSwitchingCamera) {
+      setIsSwitchingCamera(true);
       setFacing(current => (current === 'back' ? 'front' : 'back'));
+      // Reset zoom when switching cameras
+      scale.value = 1;
+      savedScale.value = 1;
+      setZoom(0);
+      // Reduce switch time
+      setTimeout(() => {
+        setIsSwitchingCamera(false);
+      }, 200);
     }
   };
 
@@ -402,67 +486,87 @@ export default function CameraScreen({ onBack }) {
 
   // Camera view
   return (
-    <View style={styles.container}>
-      {/* Top controls */}
-      <View style={styles.topControls}>
-        <TouchableOpacity
-          onPress={() => setFlashMode(prev => prev === 'off' ? 'on' : 'off')}
-          style={styles.topControlButton}
-          disabled={isVirtualDevice}
-        >
-          {flashMode === 'off' ? (
-            <ZapOff size={28} color="#ffffff" />
-          ) : (
-            <Zap size={28} color="#fbbf24" />
-          )}
-        </TouchableOpacity>
+    <GestureHandlerRootView style={styles.container}>
+      <View style={styles.container}>
+        {/* Soft flash overlay */}
+        <Animated.View 
+          style={[styles.flashOverlay, flashAnimatedStyle]} 
+          pointerEvents="none"
+        />
 
-        <TouchableOpacity style={styles.topControlButton}>
-          <Settings size={28} color="#ffffff" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Camera viewfinder */}
-      <View style={styles.cameraContainer}>
-        <View style={styles.cameraFrame}>
-          <CameraView
-            ref={cameraRef}
-            style={styles.camera}
-            facing={facing}
-            flash={flashMode}
-          />
-        </View>
-      </View>
-
-      {/* Bottom controls */}
-      <View style={styles.bottomControlsContainer}>
-        <View style={styles.bottomControls}>
-          {/* Gallery preview */}
-          <View style={styles.galleryPreview}>
-            <View style={styles.galleryCircle1} />
-            <View style={styles.galleryCircle2} />
-          </View>
-
-          {/* Capture button */}
-          <TouchableOpacity 
-            style={[styles.captureButton, (isCapturing || isVirtualDevice) && styles.captureButtonDisabled]}
-            onPress={capturePhoto}
-            disabled={isCapturing || isVirtualDevice}
-          >
-            <View style={[styles.captureButtonInner, isCapturing && styles.captureButtonCapturing]} />
-          </TouchableOpacity>
-
-          {/* Camera switch button */}
-          <TouchableOpacity 
-            onPress={switchCamera}
-            style={[styles.switchButton, isVirtualDevice && styles.switchButtonDisabled]}
+        {/* Top controls */}
+        <View style={styles.topControls}>
+          <TouchableOpacity
+            onPress={() => setFlashMode(prev => prev === 'off' ? 'on' : 'off')}
+            style={styles.topControlButton}
             disabled={isVirtualDevice}
           >
-            <RefreshCcw size={24} color="#ffffff" />
+            {flashMode === 'off' ? (
+              <ZapOff size={28} color="#ffffff" />
+            ) : (
+              <Zap size={28} color="#fbbf24" />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.topControlButton}>
+            <Settings2 size={28} color="#ffffff" />
           </TouchableOpacity>
         </View>
+
+        {/* Zoom indicator - moved up slightly */}
+        <View style={styles.zoomIndicator}>
+          <Text style={styles.zoomText}>{zoomToDisplay(zoom)}x</Text>
+        </View>
+
+        {/* Camera viewfinder with pinch gesture */}
+        <View style={styles.cameraContainer}>
+          <View style={styles.cameraFrame}>
+            <GestureDetector gesture={pinchGesture}>
+              <View style={styles.cameraWrapper}>
+                <CameraView
+                  ref={cameraRef}
+                  style={styles.camera}
+                  facing={facing}
+                  flash={flashMode}
+                  zoom={zoom}
+                  mirror={facing === 'front'}
+                />
+              </View>
+            </GestureDetector>
+          </View>
+        </View>
+
+        {/* Bottom controls */}
+        <View style={styles.bottomControlsContainer}>
+          <View style={styles.bottomControls}>
+            {/* Gallery preview */}
+            <View style={styles.galleryPreview}>
+              <View style={styles.galleryCircle1} />
+              <View style={styles.galleryCircle2} />
+            </View>
+
+            {/* Capture button */}
+            <TouchableOpacity 
+              style={[styles.captureButton, (isCapturing || isVirtualDevice) && styles.captureButtonDisabled]}
+              onPress={capturePhoto}
+              disabled={isCapturing || isVirtualDevice}
+              activeOpacity={isCapturing ? 0.3 : 0.7}
+            >
+              <View style={[styles.captureButtonInner, isCapturing && styles.captureButtonCapturing]} />
+            </TouchableOpacity>
+
+            {/* Camera switch button */}
+            <TouchableOpacity 
+              onPress={switchCamera}
+              style={[styles.switchButton, (isVirtualDevice || isSwitchingCamera) && styles.switchButtonDisabled]}
+              disabled={isVirtualDevice || isSwitchingCamera}
+            >
+              <RefreshCcw size={24} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
-    </View>
+    </GestureHandlerRootView>
   );
 }
 
@@ -470,6 +574,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  flashOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 1000,
   },
   errorContainer: {
     flex: 1,
@@ -563,14 +676,18 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   previewImageContainer: {
-    width: '100%',
-    maxWidth: 320,
-    aspectRatio: 4/5,
-  },
+  aspectRatio: ASPECT_RATIO,
+  width: '100%',
+  maxWidth: 400,
+  maxHeight: height - 160,
+  borderRadius: 24, // Match camera frame border radius
+  overflow: 'hidden', // Ensure all corners are rounded
+  backgroundColor: '#000000',
+},
+
   previewImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 16,
   },
   postControls: {
     padding: 24,
@@ -578,7 +695,7 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   controlSection: {
-    gap: 12,
+    gap: 5,
   },
   controlLabel: {
     fontSize: 14,
@@ -647,23 +764,43 @@ const styles = StyleSheet.create({
   },
   cameraContainer: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     padding: 16,
+    paddingTop: 85,
     backgroundColor: '#000000',
   },
   cameraFrame: {
-    aspectRatio: 4/5,
+    aspectRatio: ASPECT_RATIO,
     width: '100%',
     maxWidth: 400,
     maxHeight: height - 160,
     borderRadius: 24,
     overflow: 'hidden',
     backgroundColor: '#000000',
+    position: 'relative',
+  },
+  cameraWrapper: {
+    width: '100%',
+    height: '100%',
   },
   camera: {
     width: '100%',
     height: '100%',
+  },
+  zoomIndicator: {
+    position: 'absolute',
+    top: 55, 
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    zIndex: 15,
+  },
+  zoomText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '500',
   },
   bottomControlsContainer: {
     position: 'absolute',
