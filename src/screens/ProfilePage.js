@@ -29,13 +29,11 @@ export default function ProfilePage() {
   const [selectedPostIndex, setSelectedPostIndex] = useState(0);
   const [pressTimer, setPressTimer] = useState(null);
   const [isScrolling, setIsScrolling] = useState(false);
-  const [isHolding, setIsHolding] = useState(false);
   const [feedReady, setFeedReady] = useState(false);
-  const [postsPrerendered, setPostsPrerendered] = useState(false);
+  const [lastTapTime, setLastTapTime] = useState(0);
   
   const feedScrollRef = useRef(null);
   const scrollTimeoutRef = useRef(null);
-  const slideAnim = useRef(new Animated.Value(screenWidth)).current;
   const previewOpacity = useRef(new Animated.Value(0)).current;
   const previewScale = useRef(new Animated.Value(0.8)).current;
 
@@ -124,27 +122,12 @@ export default function ProfilePage() {
   // Sort posts by dateCreated (newest first)
   const sortedPosts = [...userPosts].sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated));
 
-  // Optimized constants for better performance
-  const POST_HEIGHT = 580; // Adjusted for 6:8 ratio consistency
-  const POST_GAP = 12; // Reduced gap for tighter spacing
+  // Constants for layout
+  const POST_HEIGHT = 580;
+  const POST_GAP = 12;
   const HEADER_HEIGHT = 70;
-  const SAFE_PADDING = 8; // Minimal padding
 
-  // Pre-render posts feed on component mount for instant switching
-  useEffect(() => {
-    // Preload all post images for better performance
-    const preloadImages = async () => {
-      const imagePromises = sortedPosts.flatMap(post => 
-        post.images.map(img => Image.prefetch(img))
-      );
-      await Promise.all(imagePromises);
-      setPostsPrerendered(true);
-    };
-    
-    preloadImages();
-  }, []);
-
-  // Debounced scroll handler for better performance
+  // Handle scroll detection - improved responsiveness
   const handleScroll = useCallback(() => {
     setIsScrolling(true);
     
@@ -152,26 +135,36 @@ export default function ProfilePage() {
       clearTimeout(scrollTimeoutRef.current);
     }
     
+    // Reduced timeout for better responsiveness
     scrollTimeoutRef.current = setTimeout(() => {
       setIsScrolling(false);
-    }, 100); // Reduced timeout for snappier response
+    }, 100);
   }, []);
 
-  const handlePostPressIn = useCallback((post, index) => {
-    if (isScrolling || isHolding) return;
+  // Cleanup scroll timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle post press (hold) - fixed to show full PostCard
+  const handlePostPress = useCallback((post, index) => {
+    if (isScrolling) return;
     
     const timer = setTimeout(() => {
       setSelectedPost(post);
-      setIsHolding(true);
       
       // Reset and animate preview
       previewOpacity.setValue(0);
-      previewScale.setValue(0.85);
+      previewScale.setValue(0.8);
       
       Animated.parallel([
         Animated.timing(previewOpacity, {
           toValue: 1,
-          duration: 200, // Faster animation
+          duration: 200,
           useNativeDriver: true,
         }),
         Animated.spring(previewScale, {
@@ -181,53 +174,58 @@ export default function ProfilePage() {
           friction: 7,
         })
       ]).start();
-    }, 150); // Reduced long press delay
+    }, 400); // Reduced from 500ms for better responsiveness
+    
     setPressTimer(timer);
-  }, [isScrolling, isHolding]);
+  }, [isScrolling]);
 
-  const handlePostPressOut = useCallback(() => {
+  // Handle post release - clear timer
+  const handlePostRelease = useCallback(() => {
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      setPressTimer(null);
+    }
+  }, [pressTimer]);
+
+  // Handle post click (tap) - improved with debouncing and immediate response
+  const handlePostClick = useCallback((post, index) => {
+    if (isScrolling) return;
+    
+    // Prevent double taps
+    const currentTime = Date.now();
+    if (currentTime - lastTapTime < 300) return;
+    setLastTapTime(currentTime);
+    
+    // Clear any existing press timer to avoid hold preview
     if (pressTimer) {
       clearTimeout(pressTimer);
       setPressTimer(null);
     }
     
-    if (!selectedPost) {
-      setIsHolding(false);
-    }
-  }, [pressTimer, selectedPost]);
-
-  const handlePostPress = useCallback((post, index) => {
-    if (isScrolling || isHolding) return;
-    
-    // Clear any existing press timer
-    if (pressTimer) {
-      clearTimeout(pressTimer);
-      setPressTimer(null);
-    }
-    
+    // Immediate state update for instant response
     setSelectedPostIndex(index);
     setShowPostsFeed(true);
-    
-    // Immediate slide in animation
-    slideAnim.setValue(0);
-    
-    // Scroll to the correct position immediately after showing feed
-    setTimeout(() => {
-      if (feedScrollRef.current) {
-        // Calculate exact position accounting for header height and safe area
-        const statusBarHeight = StatusBar.currentHeight || 0;
-        const safeAreaTop = 44; // Approximate safe area top for most devices
-        const totalHeaderHeight = HEADER_HEIGHT + safeAreaTop + statusBarHeight;
-        const targetY = index * (POST_HEIGHT + POST_GAP) + totalHeaderHeight;
-        
-        feedScrollRef.current.scrollTo({ 
-          y: targetY, 
-          animated: false 
-        });
-        setFeedReady(true);
-      }
-    }, 50);
-  }, [isScrolling, isHolding, pressTimer]);
+  }, [isScrolling, lastTapTime, pressTimer]);
+
+  // Scroll to the selected post when feed opens - fixed positioning
+  useEffect(() => {
+    if (showPostsFeed && feedScrollRef.current) {
+      // Increased delay to ensure modal is fully rendered
+      const timer = setTimeout(() => {
+        if (feedScrollRef.current) {
+          // Adjusted calculation to account for header and proper positioning
+          const targetY = selectedPostIndex * (POST_HEIGHT + POST_GAP);
+          feedScrollRef.current.scrollTo({ 
+            y: targetY, 
+            animated: false 
+          });
+          setFeedReady(true);
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showPostsFeed, selectedPostIndex]);
 
   const closeModal = useCallback(() => {
     if (!selectedPost) return;
@@ -239,47 +237,39 @@ export default function ProfilePage() {
         useNativeDriver: true,
       }),
       Animated.timing(previewScale, {
-        toValue: 0.85,
+        toValue: 0.8,
         duration: 150,
         useNativeDriver: true,
       })
     ]).start(() => {
       setSelectedPost(null);
-      setIsHolding(false);
     });
   }, [selectedPost]);
 
   const closeFeed = useCallback(() => {
-    Animated.timing(slideAnim, {
-      toValue: screenWidth,
-      duration: 280,
-      useNativeDriver: true,
-    }).start(() => {
-      setShowPostsFeed(false);
-      setFeedReady(false);
-    });
+    setShowPostsFeed(false);
+    setFeedReady(false);
   }, []);
 
   const renderGridPost = useCallback((post, index) => {
     const gridItemWidth = (screenWidth - 24) / 2;
-    const gridItemHeight = gridItemWidth * 1.33; // 6:8 ratio (4:3 for grid display)
+    const gridItemHeight = gridItemWidth * 1.33;
     
     return (
       <TouchableOpacity
         key={post.id}
         style={[styles.gridItem, { width: gridItemWidth, height: gridItemHeight }]}
-        onPressIn={() => handlePostPressIn(post, index)}
-        onPressOut={handlePostPressOut}
-        onPress={() => handlePostPress(post, index)}
-        activeOpacity={0.9}
+        onPressIn={() => handlePostPress(post, index)}
+        onPressOut={handlePostRelease}
+        onPress={() => handlePostClick(post, index)}
+        activeOpacity={0.7}
         delayPressIn={0}
+        delayPressOut={0}
       >
         <Image
           source={{ uri: post.images[0] }}
           style={styles.gridImage}
           resizeMode="cover"
-          // Add cache policy for better performance
-          cache="force-cache"
         />
         {post.images.length > 1 && (
           <View style={styles.multipleImagesIndicator}>
@@ -290,7 +280,7 @@ export default function ProfilePage() {
         )}
       </TouchableOpacity>
     );
-  }, [handlePostPressIn, handlePostPressOut, handlePostPress]);
+  }, [handlePostPress, handlePostRelease, handlePostClick]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -301,7 +291,7 @@ export default function ProfilePage() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
-        scrollEventThrottle={32} // Optimized throttle
+        scrollEventThrottle={16}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -316,7 +306,6 @@ export default function ProfilePage() {
               <Image
                 source={{ uri: 'https://i.pravatar.cc/150?img=33' }}
                 style={styles.profilePicture}
-                cache="force-cache"
               />
             </View>
           </View>
@@ -362,10 +351,10 @@ export default function ProfilePage() {
         </View>
       </ScrollView>
 
-      {/* Pre-rendered Posts Feed Modal - Always rendered but hidden */}
+      {/* Posts Feed Modal */}
       <Modal
         visible={showPostsFeed}
-        animationType="none"
+        animationType="slide"
         transparent={false}
         onRequestClose={closeFeed}
         statusBarTranslucent={true}
@@ -388,9 +377,6 @@ export default function ProfilePage() {
                 style={styles.feedScrollView}
                 contentContainerStyle={styles.feedContent}
                 showsVerticalScrollIndicator={false}
-                removeClippedSubviews={true} // Performance optimization
-                maxToRenderPerBatch={3} // Render optimization
-                windowSize={5} // Memory optimization
               >
                 {sortedPosts.map((post, index) => (
                   <View key={`feed-${post.id}-${index}`} style={styles.feedPostContainer}>
@@ -403,7 +389,7 @@ export default function ProfilePage() {
         </GestureHandlerRootView>
       </Modal>
 
-      {/* Simplified Hold Preview Modal - Just shows PostCard */}
+      {/* Hold Preview Modal - Fixed to show full PostCard */}
       <Modal
         visible={selectedPost !== null}
         animationType="none"
@@ -628,7 +614,7 @@ const styles = StyleSheet.create({
   },
   feedContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 16, // Increased top padding to prevent cutoff
     paddingBottom: 40,
   },
   feedPostContainer: {
