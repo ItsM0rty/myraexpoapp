@@ -12,13 +12,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
+  const [showNavbar, setShowNavbar] = useState(true);
 
   const renderContent = () => {
     switch (activeTab) {
       case 'home': return <HomeFeed />;
       case 'search': return <SearchPage />;
       case 'create': return <CameraScreen />;
-      case 'chat': return <ChatPage />;
+      case 'chat': return <ChatPage onNavbarToggle={setShowNavbar} />;
       case 'profile': return <ProfilePage />;
       default: return null;
     }
@@ -26,48 +27,45 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-    
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="black" translucent />
-      <View style={styles.content}>
-        {renderContent()}
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="black" translucent />
+        <View style={styles.content}>
+          {renderContent()}
+        </View>
+        
+        {showNavbar && (
+          <View style={styles.navbar}>
+            <NavIcon 
+              icon={<Home size={24} color={activeTab === 'home' ? 'white' : '#666'} />} 
+              onPress={() => setActiveTab('home')} 
+              active={activeTab === 'home'} 
+            />
+            <NavIcon 
+              icon={<Search size={24} color={activeTab === 'search' ? 'white' : '#666'} />} 
+              onPress={() => setActiveTab('search')} 
+              active={activeTab === 'search'} 
+            />
+            <NavIcon 
+              icon={<ScanFace size={24} color={activeTab === 'create' ? 'white' : '#666'} />} 
+              onPress={() => setActiveTab('create')} 
+              active={activeTab === 'create'} 
+            />
+            <NavIcon 
+              icon={<MessageCircle size={24} color={activeTab === 'chat' ? 'white' : '#666'} />} 
+              onPress={() => setActiveTab('chat')} 
+              active={activeTab === 'chat'} 
+            />
+            <NavIcon 
+              icon={<User size={24} color={activeTab === 'profile' ? 'white' : '#666'} />} 
+              onPress={() => setActiveTab('profile')} 
+              active={activeTab === 'profile'} 
+            />
+          </View>
+        )}
       </View>
-      
-      <View style={styles.navbar}>
-        <NavIcon 
-          icon={<Home size={24} color={activeTab === 'home' ? 'white' : '#666'} />} 
-          onPress={() => setActiveTab('home')} 
-          active={activeTab === 'home'} 
-        />
-        <NavIcon 
-          icon={<Search size={24} color={activeTab === 'search' ? 'white' : '#666'} />} 
-          onPress={() => setActiveTab('search')} 
-          active={activeTab === 'search'} 
-        />
-        <NavIcon 
-          icon={<ScanFace size={24} color={activeTab === 'create' ? 'white' : '#666'} />} 
-          onPress={() => setActiveTab('create')} 
-          active={activeTab === 'create'} 
-        />
-        <NavIcon 
-          icon={<MessageCircle size={24} color={activeTab === 'chat' ? 'white' : '#666'} />} 
-          onPress={() => setActiveTab('chat')} 
-          active={activeTab === 'chat'} 
-        />
-        <NavIcon 
-          icon={<User size={24} color={activeTab === 'profile' ? 'white' : '#666'} />} 
-          onPress={() => setActiveTab('profile')} 
-          active={activeTab === 'profile'} 
-        />
-      </View>
-    </View>
     </GestureHandlerRootView>
-  
-);
+  );
 }
-
-
-
 
 const styles = StyleSheet.create({
   container: {

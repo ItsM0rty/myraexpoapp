@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,9 +16,16 @@ import {
   Send 
 } from 'lucide-react-native';
 
-export default function ChatPage() {
+export default function ChatPage({ onNavbarToggle }) {
   const [activeChat, setActiveChat] = useState(null);
   const [message, setMessage] = useState('');
+
+  // Control navbar visibility
+  useEffect(() => {
+    if (onNavbarToggle) {
+      onNavbarToggle(activeChat === null);
+    }
+  }, [activeChat, onNavbarToggle]);
 
   const chatList = [
     { 
@@ -101,25 +108,28 @@ export default function ChatPage() {
                 source={{ uri: chat.avatar }} 
                 style={styles.avatar}
               />
-              {chat.unread && (
-                <View style={styles.unreadBadge} />
-              )}
             </View>
             <View style={styles.chatInfo}>
-              <View style={styles.chatHeader}>
-                <Text style={styles.chatName}>{chat.name}</Text>
-                <Text style={styles.chatTime}>{chat.time}</Text>
+              <View style={styles.chatItemHeader}>
+                <Text style={[styles.chatName, chat.unread && styles.chatNameUnread]}>{chat.name}</Text>
               </View>
               <View style={styles.chatPreview}>
-                <Text style={styles.lastMessage} numberOfLines={1}>
+                <Text style={[styles.lastMessage, chat.unread && styles.lastMessageUnread]} numberOfLines={1}>
                   {chat.lastMessage}
                 </Text>
-                {chat.unread && (
-                  <View style={styles.unreadDot} />
-                )}
               </View>
             </View>
-            <ChevronRight color="#6B7280" size={20} />
+            <View style={styles.rightSection}>
+              <View style={styles.timeAndDotContainer}>
+                <Text style={styles.chatTime}>{chat.time}</Text>
+                <View style={styles.dotSpace}>
+                  {chat.unread && (
+                    <View style={styles.unreadIndicator} />
+                  )}
+                </View>
+              </View>
+              <ChevronRight color="#6B7280" size={20} />
+            </View>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -130,90 +140,92 @@ export default function ChatPage() {
     const currentChat = getCurrentChat();
     
     return (
-      <KeyboardAvoidingView 
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.chatHeader}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => setActiveChat(null)}
-          >
-            <ChevronRight 
-              color="#FFFFFF" 
-              size={24} 
-              style={{ transform: [{ rotate: '180deg' }] }}
-            />
-          </TouchableOpacity>
-          <Image 
-            source={{ uri: currentChat.avatar }} 
-            style={styles.chatHeaderAvatar}
-          />
-          <View style={styles.chatHeaderInfo}>
-            <Text style={styles.chatHeaderName}>{currentChat.name}</Text>
-            <Text style={styles.chatHeaderUsername}>@{currentChat.username}</Text>
-          </View>
-          <TouchableOpacity>
-            <MoreHorizontal color="#FFFFFF" size={24} />
-          </TouchableOpacity>
-        </View>
-        
-        <ScrollView style={styles.messagesContainer} contentContainerStyle={styles.messagesContent}>
-          {messages[activeChat]?.map((msg) => (
-            <View 
-              key={msg.id}
-              style={[
-                styles.messageRow,
-                msg.sender === 'me' ? styles.messageRowRight : styles.messageRowLeft
-              ]}
-            >
-              <View 
-                style={[
-                  styles.messageBubble,
-                  msg.sender === 'me' ? styles.myMessageBubble : styles.theirMessageBubble
-                ]}
-              >
-                <Text style={[
-                  styles.messageText,
-                  msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
-                ]}>
-                  {msg.text}
-                </Text>
-                <Text style={[
-                  styles.messageTime,
-                  msg.sender === 'me' ? styles.myMessageTime : styles.theirMessageTime
-                ]}>
-                  {msg.time}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-        
-        <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.textInput}
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Message..."
-              placeholderTextColor="#6B7280"
-              onSubmitEditing={handleSendMessage}
-              returnKeyType="send"
-            />
+      <View style={styles.container}>
+        <KeyboardAvoidingView 
+          style={styles.chatScreenContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.chatScreenHeader}>
             <TouchableOpacity 
-              onPress={handleSendMessage}
-              disabled={!message.trim()}
-              style={styles.sendButton}
+              style={styles.backButton}
+              onPress={() => setActiveChat(null)}
             >
-              <Send 
-                color={message.trim() ? '#3B82F6' : '#6B7280'} 
-                size={20}
+              <ChevronRight 
+                color="#FFFFFF" 
+                size={24} 
+                style={{ transform: [{ rotate: '180deg' }] }}
               />
             </TouchableOpacity>
+            <Image 
+              source={{ uri: currentChat.avatar }} 
+              style={styles.chatHeaderAvatar}
+            />
+            <View style={styles.chatHeaderInfo}>
+              <Text style={styles.chatHeaderName}>{currentChat.name}</Text>
+              <Text style={styles.chatHeaderUsername}>@{currentChat.username}</Text>
+            </View>
+            <TouchableOpacity>
+              <MoreHorizontal color="#FFFFFF" size={24} />
+            </TouchableOpacity>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+          
+          <ScrollView style={styles.messagesContainer} contentContainerStyle={styles.messagesContent}>
+            {messages[activeChat]?.map((msg) => (
+              <View 
+                key={msg.id}
+                style={[
+                  styles.messageRow,
+                  msg.sender === 'me' ? styles.messageRowRight : styles.messageRowLeft
+                ]}
+              >
+                <View 
+                  style={[
+                    styles.messageBubble,
+                    msg.sender === 'me' ? styles.myMessageBubble : styles.theirMessageBubble
+                  ]}
+                >
+                  <Text style={[
+                    styles.messageText,
+                    msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
+                  ]}>
+                    {msg.text}
+                  </Text>
+                  <Text style={[
+                    styles.messageTime,
+                    msg.sender === 'me' ? styles.myMessageTime : styles.theirMessageTime
+                  ]}>
+                    {msg.time}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+          
+          <View style={styles.inputContainer}>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.textInput}
+                value={message}
+                onChangeText={setMessage}
+                placeholder="Message..."
+                placeholderTextColor="#6B7280"
+                onSubmitEditing={handleSendMessage}
+                returnKeyType="send"
+              />
+              <TouchableOpacity 
+                onPress={handleSendMessage}
+                disabled={!message.trim()}
+                style={styles.sendButton}
+              >
+                <Send 
+                  color={message.trim() ? '#3B82F6' : '#6B7280'} 
+                  size={20}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
     );
   };
 
@@ -226,8 +238,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingTop: 15,
+    paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#1F2937',
   },
@@ -237,14 +250,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
   newChatButton: {
     color: '#3B82F6',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   chatList: {
     flex: 1,
@@ -252,48 +265,75 @@ const styles = StyleSheet.create({
   chatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#1F2937',
   },
   avatarContainer: {
     position: 'relative',
-    marginRight: 12,
+    marginRight: 16,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
   unreadBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 16,
-    height: 16,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
+    top: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    backgroundColor: '#3B82F6',
+    borderRadius: 6,
     borderWidth: 2,
     borderColor: '#000000',
   },
   chatInfo: {
     flex: 1,
+    marginRight: 12,
   },
-  chatHeader: {
+  chatItemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   chatName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'Roboto',
+  },
+  chatNameUnread: {
+    fontWeight: '700',
+  },
+  rightSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+  },
+  timeAndDotContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+    minWidth: 50, // Ensures consistent spacing
   },
   chatTime: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#6B7280',
+    marginRight: 6,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 13, // Match fontSize to remove extra spacing
+  },
+  dotSpace: {
+    height: 8,
+    width: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   chatPreview: {
     flexDirection: 'row',
@@ -301,44 +341,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   lastMessage: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#9CA3AF',
     flex: 1,
     marginRight: 8,
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
-  unreadDot: {
+  lastMessageUnread: {
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  unreadIndicator: {
     width: 8,
     height: 8,
     backgroundColor: '#3B82F6',
     borderRadius: 4,
   },
-  chatHeader: {
+  chatScreenContainer: {
+    flex: 1,
+  },
+  chatScreenHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#1F2937',
   },
   backButton: {
-    marginRight: 8,
+    marginRight: 12,
+    padding: 4,
   },
   chatHeaderAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 12,
   },
   chatHeaderInfo: {
     flex: 1,
   },
   chatHeaderName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'Roboto',
   },
   chatHeaderUsername: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#6B7280',
   },
   messagesContainer: {
@@ -373,6 +424,7 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 16,
     lineHeight: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
   myMessageText: {
     color: '#FFFFFF',
