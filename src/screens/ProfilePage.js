@@ -10,6 +10,7 @@ import {
   Animated,
   Modal,
   StatusBar,
+  TouchableWithoutFeedback, // Added TouchableWithoutFeedback
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -19,7 +20,7 @@ import {
   ArrowLeft,
   Blend,
 } from 'lucide-react-native';
-import PostCard from '../components/PostCard';
+import PostCard from '../components/PostCard'; // Assuming PostCard.js is in ../components/
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -29,13 +30,16 @@ export default function ProfilePage() {
   const [selectedPostIndex, setSelectedPostIndex] = useState(0);
   const [pressTimer, setPressTimer] = useState(null);
   const [isScrolling, setIsScrolling] = useState(false);
-  const [feedReady, setFeedReady] = useState(false);
+  // const [feedReady, setFeedReady] = useState(false); // feedReady seems unused, can be removed if not needed elsewhere
   const [lastTapTime, setLastTapTime] = useState(0);
-  
+
   const feedScrollRef = useRef(null);
   const scrollTimeoutRef = useRef(null);
   const previewOpacity = useRef(new Animated.Value(0)).current;
   const previewScale = useRef(new Animated.Value(0.8)).current;
+
+  // Ref to track if a hold action occurred in the current interaction
+  const didHoldOccurRef = useRef(false);
 
   const userPosts = [
     {
@@ -119,48 +123,47 @@ export default function ProfilePage() {
     }
   ];
 
-  // Sort posts by dateCreated (newest first)
   const sortedPosts = [...userPosts].sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated));
 
-  // Constants for layout
-  const POST_HEIGHT = 580;
-  const POST_GAP = 12;
-  const HEADER_HEIGHT = 70;
+  const POST_HEIGHT = 580; // Used for scrolling in feed
+  const POST_GAP = 12; // Used for scrolling in feed
+  // const HEADER_HEIGHT = 70; // Seems unused
 
-  // Handle scroll detection - improved responsiveness
   const handleScroll = useCallback(() => {
     setIsScrolling(true);
-    
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
     }
-    
-    // Reduced timeout for better responsiveness
     scrollTimeoutRef.current = setTimeout(() => {
       setIsScrolling(false);
     }, 100);
   }, []);
 
-  // Cleanup scroll timeout on unmount
   useEffect(() => {
     return () => {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
+      // Clear pressTimer on unmount as well
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+      }
     };
-  }, []);
+  }, [pressTimer]); // Added pressTimer to dependency array for cleanup
 
-  // Handle post press (hold) - fixed to show full PostCard
-  const handlePostPress = useCallback((post, index) => {
+  const handlePostPress = useCallback((post) => { // Index not needed here
     if (isScrolling) return;
-    
+
     const timer = setTimeout(() => {
+      // Check if the press is still active (e.g. selectedPost is still null or pressTimer hasn't been cleared by a release)
+      // This check helps prevent setting state if the user released just before the timer fired.
+      // However, with the current logic, if timer fires, it means a hold.
       setSelectedPost(post);
-      
-      // Reset and animate preview
+      didHoldOccurRef.current = true; // Mark that a hold action has completed
+
       previewOpacity.setValue(0);
       previewScale.setValue(0.8);
-      
+
       Animated.parallel([
         Animated.timing(previewOpacity, {
           toValue: 1,
@@ -174,62 +177,57 @@ export default function ProfilePage() {
           friction: 7,
         })
       ]).start();
-    }, 400); // Reduced from 500ms for better responsiveness
-    
+    }, 400); 
     setPressTimer(timer);
-  }, [isScrolling]);
+  }, [isScrolling, previewOpacity, previewScale]); // Added previewOpacity, previewScale to deps
 
-  // Handle post release - clear timer
   const handlePostRelease = useCallback(() => {
     if (pressTimer) {
       clearTimeout(pressTimer);
       setPressTimer(null);
     }
+    // didHoldOccurRef is reset at the beginning of a new onPressIn
   }, [pressTimer]);
 
-  // Handle post click (tap) - improved with debouncing and immediate response
   const handlePostClick = useCallback((post, index) => {
+    // The check for didHoldOccurRef.current is now done in the onPress handler directly.
+    // So, if handlePostClick is called, it means a tap (not a hold) is intended.
+
     if (isScrolling) return;
-    
-    // Prevent double taps
+
     const currentTime = Date.now();
-    if (currentTime - lastTapTime < 300) return;
+    if (currentTime - lastTapTime < 300) return; // Debounce
     setLastTapTime(currentTime);
-    
-    // Clear any existing press timer to avoid hold preview
+
+    // This clear is still important: if user taps very quickly *before* hold timer fires.
     if (pressTimer) {
       clearTimeout(pressTimer);
       setPressTimer(null);
     }
-    
-    // Immediate state update for instant response
+
     setSelectedPostIndex(index);
     setShowPostsFeed(true);
   }, [isScrolling, lastTapTime, pressTimer]);
 
-  // Scroll to the selected post when feed opens - fixed positioning
   useEffect(() => {
     if (showPostsFeed && feedScrollRef.current) {
-      // Increased delay to ensure modal is fully rendered
       const timer = setTimeout(() => {
         if (feedScrollRef.current) {
-          // Adjusted calculation to account for header and proper positioning
           const targetY = selectedPostIndex * (POST_HEIGHT + POST_GAP);
-          feedScrollRef.current.scrollTo({ 
-            y: targetY, 
-            animated: false 
+          feedScrollRef.current.scrollTo({
+            y: targetY,
+            animated: false
           });
-          setFeedReady(true);
+          // setFeedReady(true); // feedReady seems unused
         }
       }, 100);
-      
       return () => clearTimeout(timer);
     }
   }, [showPostsFeed, selectedPostIndex]);
 
   const closeModal = useCallback(() => {
-    if (!selectedPost) return;
-    
+    if (!selectedPost) return; // Check if a post is actually selected
+
     Animated.parallel([
       Animated.timing(previewOpacity, {
         toValue: 0,
@@ -244,27 +242,37 @@ export default function ProfilePage() {
     ]).start(() => {
       setSelectedPost(null);
     });
-  }, [selectedPost]);
+  }, [selectedPost, previewOpacity, previewScale]); // Added deps
 
   const closeFeed = useCallback(() => {
     setShowPostsFeed(false);
-    setFeedReady(false);
+    // setFeedReady(false); // feedReady seems unused
   }, []);
 
   const renderGridPost = useCallback((post, index) => {
-    const gridItemWidth = (screenWidth - 24) / 2;
+    const gridItemWidth = (screenWidth - 24) / 2; // 8 (paddingHorizontal) * 2 + 8 (gap) = 24
     const gridItemHeight = gridItemWidth * 1.33;
-    
+
     return (
       <TouchableOpacity
         key={post.id}
         style={[styles.gridItem, { width: gridItemWidth, height: gridItemHeight }]}
-        onPressIn={() => handlePostPress(post, index)}
+        onPressIn={() => {
+          didHoldOccurRef.current = false; // Reset for new press interaction
+          handlePostPress(post); // Pass only post, index not used by handlePostPress
+        }}
         onPressOut={handlePostRelease}
-        onPress={() => handlePostClick(post, index)}
+        onPress={() => {
+          // If a hold action was already triggered and successfully showed the preview,
+          // we don't want to also trigger the click action.
+          if (didHoldOccurRef.current) {
+            return;
+          }
+          handlePostClick(post, index);
+        }}
         activeOpacity={0.7}
-        delayPressIn={0}
-        delayPressOut={0}
+        delayPressIn={0} // Important for immediate onPressIn
+        // delayPressOut={0} // Default is 0, not strictly needed
       >
         <Image
           source={{ uri: post.images[0] }}
@@ -280,24 +288,24 @@ export default function ProfilePage() {
         )}
       </TouchableOpacity>
     );
-  }, [handlePostPress, handlePostRelease, handlePostClick]);
+  }, [handlePostPress, handlePostRelease, handlePostClick]); // Dependencies for renderGridPost
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
-      
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
-        scrollEventThrottle={16}
+        scrollEventThrottle={16} // Good for onScroll performance
       >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerText}>@suyashbhattarai</Text>
         </View>
-        
+
         {/* Profile Info Section */}
         <View style={styles.profileSection}>
           {/* Profile Picture Area */}
@@ -330,12 +338,12 @@ export default function ProfilePage() {
                 <Text style={styles.statLabel}>Following</Text>
               </View>
             </View>
-            
+
             <View style={styles.actionsRight}>
               <TouchableOpacity style={styles.followButton}>
                 <Text style={styles.followButtonText}>follow</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.chatButton}>
                 <MessageCircle size={20} color="#000000" />
               </TouchableOpacity>
@@ -392,40 +400,43 @@ export default function ProfilePage() {
       {/* Hold Preview Modal - Fixed to show full PostCard */}
       <Modal
         visible={selectedPost !== null}
-        animationType="none"
+        animationType="none" // Using custom Animated opacity/scale
         transparent={true}
         onRequestClose={closeModal}
         statusBarTranslucent={true}
       >
         <TouchableOpacity
-          style={styles.previewModal}
-          activeOpacity={1}
-          onPress={closeModal}
+          style={styles.previewModal} // This TouchableOpacity acts as the modal background
+          activeOpacity={1} // To make the background fully opaque to touches
+          onPress={closeModal} // Close modal if background is tapped
         >
-          <Animated.View 
-            style={[
-              styles.previewContainer,
-              {
-                opacity: previewOpacity,
-                transform: [{ scale: previewScale }],
-              }
-            ]}
-          >
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={closeModal}
+          {/* Wrap content in a non-TouchableOpacity View to prevent press propagation if content is tapped */}
+          <TouchableWithoutFeedback onPress={() => { /* Do nothing to prevent closing when tapping on card */}}>
+            <Animated.View
+              style={[
+                styles.previewContainer,
+                {
+                  opacity: previewOpacity,
+                  transform: [{ scale: previewScale }],
+                }
+              ]}
             >
-              <View style={styles.closeButtonBackground}>
-                <X size={24} color="white" />
-              </View>
-            </TouchableOpacity>
-            
-            {selectedPost && (
-              <View style={styles.previewPostContainer}>
-                <PostCard {...selectedPost} />
-              </View>
-            )}
-          </Animated.View>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={closeModal}
+              >
+                <View style={styles.closeButtonBackground}>
+                  <X size={24} color="white" />
+                </View>
+              </TouchableOpacity>
+
+              {selectedPost && (
+                <View style={styles.previewPostContainer}>
+                  <PostCard {...selectedPost} />
+                </View>
+              )}
+            </Animated.View>
+          </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>
@@ -452,14 +463,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontStyle: 'italic',
     color: 'white',
-    fontFamily: 'serif',
+    fontFamily: 'serif', // Ensure this font is available or use a default
   },
   profileSection: {
     paddingHorizontal: 8,
     marginBottom: 24,
   },
   profilePictureContainer: {
-    backgroundColor: '#000000',
+    backgroundColor: '#000000', // Or a slightly different shade for depth
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
@@ -468,13 +479,13 @@ const styles = StyleSheet.create({
   profilePictureBorder: {
     borderWidth: 2,
     borderColor: 'white',
-    borderRadius: 80,
+    borderRadius: 80, // Should be half of width/height of inner image + padding
     padding: 6,
   },
   profilePicture: {
     width: 128,
     height: 128,
-    borderRadius: 64,
+    borderRadius: 64, // Half of width/height
   },
   bioContainer: {
     backgroundColor: 'white',
@@ -545,18 +556,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   postsGrid: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 8, // Matches profileSection for alignment
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 8, // Gap between items
   },
   gridItem: {
-    backgroundColor: '#3f3f46',
+    backgroundColor: '#3f3f46', // Placeholder color
     borderRadius: 12,
     overflow: 'hidden',
-    position: 'relative',
+    position: 'relative', // For absolute positioning of indicators
   },
   gridImage: {
     width: '100%',
@@ -571,11 +582,11 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 12,
+    borderRadius: 12, // Half of width/height
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gestureContainer: {
+  gestureContainer: { // For react-native-gesture-handler
     flex: 1,
   },
   feedModalSafeArea: {
@@ -591,62 +602,65 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 14, // Or adjust to match typical header height
     borderBottomWidth: 1,
-    borderBottomColor: '#374151',
-    backgroundColor: '#000000',
-    zIndex: 10,
+    borderBottomColor: '#374151', // Darker border
+    backgroundColor: '#000000', // Ensure header bg matches modal bg
+    zIndex: 10, // Keep header above content
   },
   backButton: {
-    padding: 4,
+    padding: 4, // Easier to tap
   },
   feedHeaderText: {
     fontSize: 18,
     fontStyle: 'italic',
     color: 'white',
-    fontFamily: 'serif',
+    fontFamily: 'serif', // Ensure this font is available
   },
-  headerSpacer: {
-    width: 32,
+  headerSpacer: { // To balance the back button for centering title
+    width: 24 + 8, // Approx width of ArrowLeft (24) + padding (4*2)
   },
   feedScrollView: {
     flex: 1,
   },
   feedContent: {
     paddingHorizontal: 16,
-    paddingTop: 16, // Increased top padding to prevent cutoff
-    paddingBottom: 40,
+    paddingTop: 16,
+    paddingBottom: 40, // Ensure space at the bottom
   },
   feedPostContainer: {
-    marginBottom: 12,
+    marginBottom: 12, // Gap between posts in feed
   },
-  previewModal: {
+  previewModal: { // This is the TouchableOpacity acting as modal background
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.92)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    padding: 20, // Padding around the content area
   },
-  previewContainer: {
-    position: 'relative',
-    width: '100%',
-    maxWidth: 380,
+  previewContainer: { // This is the Animated.View holding the PostCard
+    position: 'relative', // For absolute positioning of close button
+    width: '100%', // Takes full width of padded area from previewModal
+    // maxWidth: 380, // REMOVED: This was causing the PostCard to be too constrained
+    alignItems: 'center', // Center the PostCard if it's narrower than this container
   },
   closeButton: {
     position: 'absolute',
-    top: -60,
-    right: 0,
-    zIndex: 20,
-    padding: 8,
+    top: -60, // Adjust as needed to position outside/above the card
+    right: 0, // Align to the right of the previewContainer
+    zIndex: 20, // Above the card
+    padding: 8, // Larger tap area
   },
   closeButtonBackground: {
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 20,
+    borderRadius: 20, // Make it circular
     padding: 8,
   },
-  previewPostContainer: {
-    borderRadius: 16,
-    overflow: 'hidden',
+  previewPostContainer: { // Wrapper for the PostCard itself inside the animated view
+    borderRadius: 16, // Match PostCard's border radius
+    overflow: 'hidden', // Clip the PostCard if it somehow overflows this
+    width: '100%', // Ensure it takes the width from previewContainer
+    // Add shadow styles if PostCard itself doesn't have them or if you want an outer shadow
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -654,6 +668,6 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.5,
     shadowRadius: 16,
-    elevation: 24,
+    elevation: 24, // For Android shadow
   },
 });

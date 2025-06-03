@@ -4,11 +4,17 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  Animated,
   Dimensions,
   StyleSheet,
 } from 'react-native';
 import PagerView from 'react-native-pager-view';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  interpolate,
+  runOnJS,
+} from 'react-native-reanimated';
 import PostCard from '../components/PostCard';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -17,11 +23,13 @@ const AnimatedPagerView = Animated.createAnimatedComponent(PagerView);
 
 export default function HomeFeed() {
   const [tab, setTab] = useState('myfeed');
-  const [pagerScrollEnabled, setPagerScrollEnabled] = useState(true);
   const pagerRef = useRef(null);
   
-  // Animation values for pill
-  const tabIndicatorX = useRef(new Animated.Value(0)).current;
+  // Reanimated shared values
+  const scrollOffset = useSharedValue(0);
+  const currentPage = useSharedValue(0);
+  const isTransitioning = useSharedValue(false);
+  const isDirectTabSwitch = useSharedValue(false); // Flag for direct tab switches
   
   // Measurements
   const tabSelectorWidth = 180;
@@ -33,47 +41,121 @@ export default function HomeFeed() {
   const onPageScroll = (event) => {
     const { offset, position } = event.nativeEvent;
     
-    // Only animate pill during continuous scroll between pages 0 and 1
-    if (position === 0 && offset >= 0 && offset <= 1) {
-      const progress = offset;
-      const pillPosition = leftPillPosition + (rightPillPosition - leftPillPosition) * progress;
-      tabIndicatorX.setValue(pillPosition);
+    // Only update if not transitioning from tab press
+    if (!isTransitioning.value) {
+      scrollOffset.value = offset;
+      currentPage.value = position;
+      isDirectTabSwitch.value = false; // Reset flag during swipe
     }
   };
 
   const onPageSelected = (e) => {
     const pageIndex = e.nativeEvent.position;
     const newTab = pageIndex === 0 ? 'myfeed' : 'dailies';
-    setTab(newTab);
     
-    // Smoothly animate pill to final position
-    const finalPosition = pageIndex === 0 ? leftPillPosition : rightPillPosition;
-    Animated.timing(tabIndicatorX, {
-      toValue: finalPosition,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
+    // Update values smoothly when page selection completes
+    currentPage.value = pageIndex;
+    scrollOffset.value = pageIndex;
+    isTransitioning.value = false;
+    isDirectTabSwitch.value = false; // Reset flag after transition
+    
+    setTab(newTab);
+  };
+
+  // Spring configurations for different interaction types
+  const springConfigs = {
+    pill: {
+      direct: { damping: 25, stiffness: 160, mass: 0.9 }, // Faster but smooth for direct switch
+      swipe: { damping: 32, stiffness: 350, mass: 0.9 } // Slightly faster for swipe, matching page transition
+    },
+    text: {
+      direct: { damping: 25, stiffness: 160, mass: 0.9 }, // Faster text fade for direct switch
+      swipe: { damping: 32, stiffness: 29, mass: 9 } // Slightly faster for swipe, matching page transition
+    },
+    page: {
+      damping: 22, stiffness: 160, mass: 0.9 // Adjusted to sync with pill animation
+    }
   };
 
   const switchTab = (newTab) => {
     if (newTab === tab) return;
     
     const pageIndex = newTab === 'myfeed' ? 0 : 1;
-    const targetPosition = pageIndex === 0 ? leftPillPosition : rightPillPosition;
     
-    // Animate pill smoothly to target position
-    Animated.timing(tabIndicatorX, {
-      toValue: targetPosition,
-      duration: 250,
-      useNativeDriver: false,
-    }).start();
+    // Set transitioning and direct tab switch flags
+    isTransitioning.value = true;
+    isDirectTabSwitch.value = true;
     
-    // Change page with slight delay to sync with pill animation
+    // Smoothly animate to target position with faster but fluid spring
+    const targetPosition = pageIndex;
+    
+    currentPage.value = withSpring(targetPosition, springConfigs.page);
+    scrollOffset.value = withSpring(targetPosition, springConfigs.page);
+    
+    // Update tab state immediately for text color changes
+    setTab(newTab);
+    
+    // Trigger page change after a longer delay to sync with animation
     setTimeout(() => {
       pagerRef.current?.setPage(pageIndex);
-      setTab(newTab);
-    }, 50);
+    }, 150); // Increased to 150ms for slower, deliberate tab switch
   };
+
+  // Animated style for the pill indicator with conditional spring parameters
+  const animatedPillStyle = useAnimatedStyle(() => {
+    let pillPosition;
+    
+    // Calculate position based on current page and scroll offset
+    const totalProgress = currentPage.value + scrollOffset.value;
+    pillPosition = interpolate(
+      totalProgress,
+      [0, 1],
+      [leftPillPosition, rightPillPosition],
+      'clamp'
+    );
+    
+    // Use different spring configs based on interaction type
+    const springConfig = isDirectTabSwitch.value 
+      ? springConfigs.pill.direct
+      : springConfigs.pill.swipe;
+    
+    return {
+      transform: [
+        {
+          translateX: withSpring(pillPosition, springConfig),
+        },
+      ],
+    };
+  });
+
+  // Animated styles for text colors with faster fade for direct tab switch
+  const myFeedTextStyle = useAnimatedStyle(() => {
+    const totalProgress = currentPage.value + scrollOffset.value;
+    const progress = interpolate(totalProgress, [0, 1], [1, 0], 'clamp');
+    const opacity = interpolate(progress, [0, 1], [0.6, 1], 'clamp');
+    
+    const springConfig = isDirectTabSwitch.value
+      ? springConfigs.text.direct
+      : springConfigs.text.swipe;
+    
+    return {
+      opacity: withSpring(opacity, springConfig),
+    };
+  });
+
+  const dailiesTextStyle = useAnimatedStyle(() => {
+    const totalProgress = currentPage.value + scrollOffset.value;
+    const progress = interpolate(totalProgress, [0, 1], [0, 1], 'clamp');
+    const opacity = interpolate(progress, [0, 1], [0.6, 1], 'clamp');
+    
+    const springConfig = isDirectTabSwitch.value
+      ? springConfigs.text.direct
+      : springConfigs.text.swipe;
+    
+    return {
+      opacity: withSpring(opacity, springConfig),
+    };
+  });
 
   const myFeedPosts = [
     { 
@@ -167,13 +249,11 @@ export default function HomeFeed() {
       {/* Tab selector with properly positioned pill */}
       <View style={styles.tabContainer}>
         <View style={styles.tabSelector}>
-          {/* Background pill */}
+          {/* Background pill with smooth animation */}
           <Animated.View 
             style={[
               styles.tabIndicator,
-              {
-                transform: [{ translateX: tabIndicatorX }]
-              }
+              animatedPillStyle
             ]} 
           />
           {/* Buttons on top */}
@@ -183,24 +263,26 @@ export default function HomeFeed() {
               onPress={() => switchTab('myfeed')}
               activeOpacity={0.7}
             >
-              <Text style={[
+              <Animated.Text style={[
                 styles.tabText,
-                { color: tab === 'myfeed' ? '#000000' : '#9CA3AF' }
+                { color: tab === 'myfeed' ? '#000000' : '#9CA3AF' },
+                myFeedTextStyle
               ]}>
                 my feed
-              </Text>
+              </Animated.Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.tabButton}
               onPress={() => switchTab('dailies')}
               activeOpacity={0.7}
             >
-              <Text style={[
+              <Animated.Text style={[
                 styles.tabText,
-                { color: tab === 'dailies' ? '#000000' : '#9CA3AF' }
+                { color: tab === 'dailies' ? '#000000' : '#9CA3AF' },
+                dailiesTextStyle
               ]}>
                 dailies
-              </Text>
+              </Animated.Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -214,7 +296,7 @@ export default function HomeFeed() {
         onPageScroll={onPageScroll}
         onPageSelected={onPageSelected}
         overdrag={false}
-        scrollEnabled={pagerScrollEnabled}
+        scrollEnabled={true}
       >
         {/* My Feed Section */}
         <View key="myfeed" style={styles.feedSection}>
@@ -223,7 +305,6 @@ export default function HomeFeed() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             scrollEventThrottle={16}
-            nestedScrollEnabled={true}
           >
             {myFeedPosts.map((post, i) => (
               <PostCard key={`feed-${i}`} {...post} />
@@ -238,7 +319,6 @@ export default function HomeFeed() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             scrollEventThrottle={16}
-            nestedScrollEnabled={true}
           >
             {dailiesPosts.map((post, i) => (
               <PostCard key={`dailies-${i}`} {...post} isDaily />
