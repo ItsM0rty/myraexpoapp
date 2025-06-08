@@ -10,7 +10,6 @@ import {
   Platform
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Device from 'expo-device';
 import { 
   ArrowLeft, 
   Zap, 
@@ -34,13 +33,12 @@ import Animated, {
   withTiming, 
   runOnJS 
 } from 'react-native-reanimated';
+import { initializeCameraWithDetection } from '../components/VirtualDeviceDetector';
 
 const { width, height } = Dimensions.get('window');
 
 // Aspect ratio constant for easy switching
 const ASPECT_RATIO = 6/8; // Change to 5/6 when needed
-
-
 
 export default function CameraScreen({ onBack }) {
   const [facing, setFacing] = useState('back');
@@ -63,147 +61,26 @@ export default function CameraScreen({ onBack }) {
   // Flash animation
   const flashOpacity = useSharedValue(0);
 
-  // Enhanced virtual device and emulator detection for mobile
-  const detectVirtualDevice = async () => {
-    try {
-      let suspicionScore = 0;
-      const detectionReasons = [];
-
-      // 1. Check if running on physical device
-      if (!Device.isDevice) {
-        suspicionScore += 10;
-        detectionReasons.push('Running on emulator/simulator');
-      }
-
-      // 2. Check device characteristics
-      const deviceInfo = {
-        brand: Device.brand,
-        manufacturer: Device.manufacturer,
-        modelName: Device.modelName,
-        deviceName: Device.deviceName,
-        osName: Device.osName,
-        osVersion: Device.osVersion
-      };
-
-      // Common emulator/virtual device identifiers
-      const suspiciousIdentifiers = [
-        'generic', 'emulator', 'simulator', 'virtual', 'test',
-        'android sdk', 'genymotion', 'bluestacks', 'nox', 'memu',
-        'ldplayer', 'remix', 'andy', 'droid4x', 'koplayer',
-        'x86', 'goldfish', 'ranchu', 'vbox', 'qemu'
-      ];
-
-      const deviceString = JSON.stringify(deviceInfo).toLowerCase();
-      const matchedSuspicious = suspiciousIdentifiers.filter(identifier => 
-        deviceString.includes(identifier)
-      );
-
-      if (matchedSuspicious.length > 0) {
-        suspicionScore += matchedSuspicious.length * 2;
-        detectionReasons.push(`Suspicious device identifiers: ${matchedSuspicious.join(', ')}`);
-      }
-
-      // 3. Platform-specific checks
-      if (Platform.OS === 'android') {
-        // Android-specific emulator detection
-        if (deviceInfo.brand === 'generic' || deviceInfo.manufacturer === 'Genymotion') {
-          suspicionScore += 5;
-          detectionReasons.push('Android emulator detected');
-        }
-
-        // Check for common Android emulator model names
-        const androidEmulatorModels = [
-          'android sdk built for x86',
-          'android sdk built for arm',
-          'sdk_gphone',
-          'emulator',
-          'android_x86'
-        ];
-
-        const modelName = deviceInfo.modelName?.toLowerCase() || '';
-        const matchedEmulatorModels = androidEmulatorModels.filter(model => 
-          modelName.includes(model)
-        );
-
-        if (matchedEmulatorModels.length > 0) {
-          suspicionScore += 3;
-          detectionReasons.push('Android emulator model detected');
-        }
-      }
-
-      if (Platform.OS === 'ios') {
-        // iOS Simulator detection
-        if (deviceInfo.modelName?.includes('Simulator')) {
-          suspicionScore += 5;
-          detectionReasons.push('iOS Simulator detected');
-        }
-      }
-
-      // 4. Check for rooted/jailbroken devices (common in testing environments)
-      // Note: This would require additional native modules for full detection
-      
-      return {
-        isVirtual: suspicionScore >= 3,
-        suspicionScore,
-        reasons: detectionReasons,
-        deviceInfo
-      };
-
-    } catch (error) {
-      console.error('Error in virtual device detection:', error);
-      return {
-        isVirtual: false,
-        suspicionScore: 0,
-        reasons: ['Detection failed'],
-        deviceInfo: null
-      };
-    }
-  };
-
-  // Camera permission and device validation
+  // Camera permission and device validation using the extracted detector
   useEffect(() => {
     const initializeCamera = async () => {
-      try {
-        setCameraError(null);
-        
-        // Step 1: Virtual device detection
-        const detection = await detectVirtualDevice();
-        
-        if (detection.isVirtual) {
-          setIsVirtualDevice(true);
-          setCameraError(`Virtual device detected: ${detection.reasons.join(', ')}`);
-          console.warn('Virtual device detection:', detection);
-          return;
-        }
-
-        // Step 2: Check camera permissions
-        if (!permission) {
-          return; // Still loading
-        }
-
-        if (!permission.granted) {
-          const response = await requestPermission();
-          if (!response.granted) {
-            setCameraError('Camera permission is required to use this feature.');
-            return;
-          }
-        }
-
-        // Step 3: Additional security checks
-        if (!Device.isDevice) {
-          setIsVirtualDevice(true);
-          setCameraError('This feature only works on physical devices.');
-          return;
-        }
-
-        // Log successful initialization
-        console.log('Camera initialized successfully on device:', detection.deviceInfo);
-        setIsVirtualDevice(false);
-
-      } catch (error) {
-        console.error('Camera initialization error:', error);
-        setCameraError('Failed to initialize camera. Please try again.');
+      setCameraError(null);
+      
+      const result = await initializeCameraWithDetection(permission, requestPermission);
+      
+      if (result.isVirtualDevice) {
+        setIsVirtualDevice(true);
+        setCameraError(result.error);
+        return;
       }
+      
+      if (result.error) {
+        setCameraError(result.error);
+        return;
+      }
+      
+      // Camera initialized successfully
+      setIsVirtualDevice(false);
     };
 
     initializeCamera();
@@ -254,45 +131,44 @@ export default function CameraScreen({ onBack }) {
   });
 
   // Enhanced photo capture with validation
-const capturePhoto = async () => {
-  if (!cameraRef.current || isCapturing || isVirtualDevice) return;
-  
-  setIsCapturing(true);
-  
-  // Trigger soft flash animation
-  triggerFlash();
-  
-  try {
-    const photo = await cameraRef.current.takePictureAsync({
-      quality: 0.8,
-      base64: false,
-      skipProcessing: false,
-      aspect: ASPECT_RATIO === 6/8 ? [6, 8] : ASPECT_RATIO === 4/5 ? [4, 5] : [5, 6],
-      shutterSound: false, // This disables the shutter sound completely
-    });
-
-    if (!photo || !photo.uri) {
-      throw new Error('Failed to capture photo');
-    }
-
-    // Additional validation: check image dimensions and file size
-    const imageInfo = await fetch(photo.uri, { method: 'HEAD' });
-    const contentLength = imageInfo.headers.get('content-length');
+  const capturePhoto = async () => {
+    if (!cameraRef.current || isCapturing || isVirtualDevice) return;
     
-    if (contentLength && parseInt(contentLength) < 1000) {
-      throw new Error('Captured image appears to be invalid');
-    }
-
-    setCapturedImage(photo.uri);
+    setIsCapturing(true);
     
-  } catch (error) {
-    console.error('Photo capture error:', error);
-    setCameraError('Failed to capture photo. Please try again.');
-  }
-  
-  setIsCapturing(false);
-};
+    // Trigger soft flash animation
+    triggerFlash();
+    
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        base64: false,
+        skipProcessing: false,
+        aspect: ASPECT_RATIO === 6/8 ? [6, 8] : ASPECT_RATIO === 4/5 ? [4, 5] : [5, 6],
+        shutterSound: false, // This disables the shutter sound completely
+      });
 
+      if (!photo || !photo.uri) {
+        throw new Error('Failed to capture photo');
+      }
+
+      // Additional validation: check image dimensions and file size
+      const imageInfo = await fetch(photo.uri, { method: 'HEAD' });
+      const contentLength = imageInfo.headers.get('content-length');
+      
+      if (contentLength && parseInt(contentLength) < 1000) {
+        throw new Error('Captured image appears to be invalid');
+      }
+
+      setCapturedImage(photo.uri);
+      
+    } catch (error) {
+      console.error('Photo capture error:', error);
+      setCameraError('Failed to capture photo. Please try again.');
+    }
+    
+    setIsCapturing(false);
+  };
 
   const switchCamera = () => {
     if (!isVirtualDevice && !isSwitchingCamera) {
@@ -676,15 +552,14 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   previewImageContainer: {
-  aspectRatio: ASPECT_RATIO,
-  width: '100%',
-  maxWidth: 400,
-  maxHeight: height - 160,
-  borderRadius: 24, // Match camera frame border radius
-  overflow: 'hidden', // Ensure all corners are rounded
-  backgroundColor: '#000000',
-},
-
+    aspectRatio: ASPECT_RATIO,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: height - 160,
+    borderRadius: 24, // Match camera frame border radius
+    overflow: 'hidden', // Ensure all corners are rounded
+    backgroundColor: '#000000',
+  },
   previewImage: {
     width: '100%',
     height: '100%',
