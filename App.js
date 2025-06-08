@@ -18,7 +18,7 @@ export default function App() {
     switch (activeTab) {
       case 'home': return <HomeFeed />;
       case 'search': return <SearchPage />;
-      case 'create': return <CameraScreen />;
+      case 'create': return <CameraScreen onNavbarToggle={setShowNavbar}/>;
       case 'chat': return <ChatPage onNavbarToggle={setShowNavbar} />;
       case 'profile': return <ProfilePage />;
       default: return null;

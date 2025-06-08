@@ -2,7 +2,6 @@ import { useAnimatedStyle, withTiming, withDelay, runOnJS, Easing } from 'react-
 
 export const useAnimations = ({
   flashOpacity,
-  zoomOpacity,
   settingsOpacity,
   settingsScale,
   dropdownOpacity,
@@ -18,10 +17,6 @@ export const useAnimations = ({
     opacity: flashOpacity.value,
   }));
 
-  const zoomAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: zoomOpacity.value,
-  }));
-
   const settingsAnimatedStyle = useAnimatedStyle(() => ({
     opacity: settingsOpacity.value,
     transform: [{ scale: settingsScale.value }],
@@ -32,16 +27,14 @@ export const useAnimations = ({
     transform: [{ scale: dropdownScale.value }],
   }));
 
-  // Show zoom indicator temporarily
+  // Show zoom indicator temporarily (kept for compatibility but not used since zoom is always visible)
   const showZoomIndicator = () => {
-    zoomOpacity.value = withTiming(1, { duration: 200 }, () => {
-      zoomOpacity.value = withDelay(2000, withTiming(0, { duration: 500 }));
-    });
+    // No-op since zoom indicator is always visible
   };
 
-  // Hide zoom indicator initially
+  // Hide zoom indicator initially (kept for compatibility but not used)
   const hideZoomIndicator = () => {
-    zoomOpacity.value = withDelay(2000, withTiming(0, { duration: 500 }));
+    // No-op since zoom indicator is always visible
   };
 
   // Toggle settings dropdown
@@ -84,7 +77,6 @@ export const useAnimations = ({
 
   return {
     flashAnimatedStyle,
-    zoomAnimatedStyle,
     settingsAnimatedStyle,
     dropdownAnimatedStyle,
     showZoomIndicator,

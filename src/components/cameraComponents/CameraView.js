@@ -8,11 +8,7 @@ import {
   ZapOff, 
   Settings2, 
   RefreshCcw,
-  Calendar,
   ChevronDown,
-  Image as ImageIcon,
-  Globe,
-  Users
 } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -80,7 +76,7 @@ export const CameraView = ({
         pointerEvents="none"
       />
 
-      {/* Top controls - inline */}
+      {/* Top controls */}
       <View style={styles.topControls}>
         <TouchableOpacity
           onPress={() => setFlashMode(prev => prev === 'off' ? 'on' : 'off')}
@@ -102,50 +98,64 @@ export const CameraView = ({
         </TouchableOpacity>
       </View>
 
-      {/* Settings Dropdown - inline */}
+      {/* Settings Dropdown */}
       {showSettings && (
         <Animated.View style={[styles.settingsDropdown, animations.settingsAnimatedStyle]}>
           <Text style={styles.settingsTitle}>Settings</Text>
           
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>Dailies duration</Text>
-            <TouchableOpacity 
-              style={styles.durationSelector}
-              onPress={onToggleDurationDropdown}
-            >
-              <Text style={styles.durationText}>{dailiesDuration}</Text>
-              <ChevronDown size={16} color="#ffffff" />
-            </TouchableOpacity>
           </View>
 
-          {/* Duration Dropdown */}
-          {showDurationDropdown && (
-            <Animated.View style={[styles.durationDropdown, animations.dropdownAnimatedStyle]}>
-              <TouchableOpacity 
-                style={[styles.durationOption, dailiesDuration === '12h' && styles.durationOptionActive]}
-                onPress={() => onSelectDuration('12h')}
-              >
-                <Text style={[styles.durationOptionText, dailiesDuration === '12h' && styles.durationOptionTextActive]}>
-                  12h
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.durationOption, dailiesDuration === '24h' && styles.durationOptionActive]}
-                onPress={() => onSelectDuration('24h')}
-              >
-                <Text style={[styles.durationOptionText, dailiesDuration === '24h' && styles.durationOptionTextActive]}>
-                  24h
-                </Text>
-              </TouchableOpacity>
-            </Animated.View>
-          )}
+          {/* Duration Selector integrated */}
+          <TouchableOpacity 
+            style={[
+              styles.durationSelector,
+              showDurationDropdown && styles.durationSelectorExpanded
+            ]}
+            onPress={onToggleDurationDropdown}
+          >
+            <View style={styles.durationSelectorContent}>
+              <Text style={styles.durationText}>{dailiesDuration}</Text>
+              <ChevronDown 
+                size={16} 
+                color="#ffffff" 
+                style={[
+                  styles.chevronIcon,
+                  showDurationDropdown && styles.chevronIconRotated
+                ]}
+              />
+            </View>
+            
+            {/* Expanded options */}
+            {showDurationDropdown && (
+              <Animated.View style={[styles.durationOptions, animations.dropdownAnimatedStyle]}>
+                <TouchableOpacity 
+                  style={[styles.durationOption, dailiesDuration === '12h' && styles.durationOptionActive]}
+                  onPress={() => onSelectDuration('12h')}
+                >
+                  <Text style={[styles.durationOptionText, dailiesDuration === '12h' && styles.durationOptionTextActive]}>
+                    12h
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.durationOption, dailiesDuration === '24h' && styles.durationOptionActive]}
+                  onPress={() => onSelectDuration('24h')}
+                >
+                  <Text style={[styles.durationOptionText, dailiesDuration === '24h' && styles.durationOptionTextActive]}>
+                    24h
+                  </Text>
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+          </TouchableOpacity>
         </Animated.View>
       )}
 
-      {/* Zoom indicator */}
-      <Animated.View style={[styles.zoomIndicator, animations.zoomAnimatedStyle]}>
+      {/* Zoom indicator - always visible, positioned above camera */}
+      <View style={styles.zoomIndicator}>
         <Text style={styles.zoomText}>{zoomToDisplay(zoom)}x</Text>
-      </Animated.View>
+      </View>
 
       {/* Camera viewfinder with pinch gesture */}
       <View style={styles.cameraContainer}>
@@ -165,43 +175,9 @@ export const CameraView = ({
         </View>
       </View>
 
-      {/* Mode Slider - inline */}
-      <View style={styles.modeSliderContainer}>
-        <View style={styles.modeSlider}>
-          <TouchableOpacity
-            onPress={() => setPostMode('dailies')}
-            style={[
-              styles.modeOption,
-              postMode === 'dailies' ? styles.modeOptionActive : styles.modeOptionInactive
-            ]}
-          >
-            <Calendar size={16} color={postMode === 'dailies' ? '#000000' : '#ffffff'} />
-            <Text style={[
-              styles.modeOptionText,
-              postMode === 'dailies' ? styles.modeOptionTextActive : styles.modeOptionTextInactive
-            ]}>
-              Dailies
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setPostMode('post')}
-            style={[
-              styles.modeOption,
-              postMode === 'post' ? styles.modeOptionActive : styles.modeOptionInactive
-            ]}
-          >
-            <ImageIcon size={16} color={postMode === 'post' ? '#000000' : '#ffffff'} />
-            <Text style={[
-              styles.modeOptionText,
-              postMode === 'post' ? styles.modeOptionTextActive : styles.modeOptionTextInactive
-            ]}>
-              Post
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
 
-      {/* Bottom controls - inline */}
+
+      {/* Bottom controls */}
       <View style={styles.bottomControlsContainer}>
         <View style={styles.bottomControls}>
           {/* Gallery preview */}
@@ -234,7 +210,7 @@ export const CameraView = ({
   );
 };
 
-// Styles (you'll need to include these in your CameraStyles file or inline)
+// Updated styles
 const styles = {
   container: {
     flex: 1,
@@ -270,58 +246,60 @@ const styles = {
     position: 'absolute',
     top: 80,
     right: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     backdropFilter: 'blur(20px)',
     borderRadius: 16,
-    padding: 16,
-    minWidth: 200,
+    padding: 20,
+    minWidth: 240,
     zIndex: 25,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   settingsTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#ffffff',
-    marginBottom: 12,
+    marginBottom: 20,
   },
   settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginBottom: 16,
   },
   settingLabel: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#ffffff',
     fontWeight: '500',
   },
   durationSelector: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    overflow: 'hidden',
+  },
+  durationSelectorExpanded: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  durationSelectorContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 8,
-    minWidth: 60,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   durationText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#ffffff',
     fontWeight: '500',
   },
-  durationDropdown: {
-    position: 'absolute',
-    top: '100%',
-    right: 0,
-    marginTop: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    backdropFilter: 'blur(20px)',
-    borderRadius: 12,
-    overflow: 'hidden',
-    minWidth: 80,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+  chevronIcon: {
+    transform: [{ rotate: '0deg' }],
+  },
+  chevronIconRotated: {
+    transform: [{ rotate: '180deg' }],
+  },
+  durationOptions: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
   },
   durationOption: {
     paddingHorizontal: 16,
@@ -332,7 +310,7 @@ const styles = {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   durationOptionText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#ffffff',
     fontWeight: '500',
   },
@@ -341,7 +319,7 @@ const styles = {
   },
   zoomIndicator: {
     position: 'absolute',
-    top: 70,
+    top: 65,
     alignSelf: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -359,7 +337,7 @@ const styles = {
     justifyContent: 'flex-start',
     alignItems: 'center',
     padding: 16,
-    paddingTop: 90,
+    paddingTop: 95,
     backgroundColor: '#000000',
   },
   cameraFrame: {
@@ -380,46 +358,7 @@ const styles = {
     width: '100%',
     height: '100%',
   },
-  modeSliderContainer: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    zIndex: 10,
-  },
-  modeSlider: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    backdropFilter: 'blur(20px)',
-    borderRadius: 25,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  modeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    gap: 8,
-    minWidth: 90,
-    justifyContent: 'center',
-  },
-  modeOptionActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-  },
-  modeOptionInactive: {
-    backgroundColor: 'transparent',
-  },
-  modeOptionText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  modeOptionTextActive: {
-    color: '#000000',
-  },
-  modeOptionTextInactive: {
-    color: '#ffffff',
-  },
+
   bottomControlsContainer: {
     position: 'absolute',
     bottom: 24,
