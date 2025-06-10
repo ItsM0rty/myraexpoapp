@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, TouchableOpacity, Text, Dimensions } from 'react-native';
 import { CameraView as ExpoCameraView } from 'expo-camera';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS } from 'react-native-reanimated';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
   Zap, 
   ZapOff, 
@@ -13,6 +14,43 @@ import {
 
 const { width, height } = Dimensions.get('window');
 const ASPECT_RATIO = 6/8;
+
+// Storage key constant
+const STORAGE_KEYS = {
+  DAILIES_DURATION: 'dailies_duration',
+};
+
+// Storage utility functions
+const StorageService = {
+  // Save dailies duration preference
+  async saveDailiesDuration(duration) {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.DAILIES_DURATION, duration);
+    } catch (error) {
+      console.error('Error saving dailies duration:', error);
+    }
+  },
+
+  // Load dailies duration preference
+  async loadDailiesDuration() {
+    try {
+      const duration = await AsyncStorage.getItem(STORAGE_KEYS.DAILIES_DURATION);
+      return duration || '24h'; // Default to 24h if nothing stored
+    } catch (error) {
+      console.error('Error loading dailies duration:', error);
+      return '24h'; // Return default on error
+    }
+  },
+
+  // Clear all stored preferences (useful for testing/reset)
+  async clearPreferences() {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.DAILIES_DURATION);
+    } catch (error) {
+      console.error('Error clearing preferences:', error);
+    }
+  }
+};
 
 export const CameraView = ({
   cameraRef,
@@ -26,7 +64,6 @@ export const CameraView = ({
   postMode,
   setPostMode,
   showSettings,
-  dailiesDuration,
   showDurationDropdown,
   scale,
   savedScale,
@@ -34,10 +71,41 @@ export const CameraView = ({
   onSwitchCamera,
   onToggleSettings,
   onToggleDurationDropdown,
-  onSelectDuration,
   animations,
   isCapturing,
 }) => {
+  // Local state for dailies duration with persistence
+  const [dailiesDuration, setDailiesDuration] = useState('24h');
+  const [isLoadingPreferences, setIsLoadingPreferences] = useState(true);
+
+  // Load saved preference on component mount
+  useEffect(() => {
+    const loadSavedDuration = async () => {
+      try {
+        const savedDuration = await StorageService.loadDailiesDuration();
+        setDailiesDuration(savedDuration);
+      } catch (error) {
+        console.error('Failed to load saved duration:', error);
+      } finally {
+        setIsLoadingPreferences(false);
+      }
+    };
+
+    loadSavedDuration();
+  }, []);
+
+  // Updated function to handle duration selection with persistence
+  const handleSelectDuration = async (duration) => {
+    try {
+      setDailiesDuration(duration);
+      await StorageService.saveDailiesDuration(duration);
+      // Close dropdown
+      onToggleDurationDropdown();
+    } catch (error) {
+      console.error('Failed to save duration preference:', error);
+    }
+  };
+
   // Convert zoom to display value (1.0x to 5.0x)
   const zoomToDisplay = (zoomValue) => {
     return (zoomValue * 4 + 1).toFixed(1);
@@ -67,6 +135,15 @@ export const CameraView = ({
     .onEnd(() => {
       savedScale.value = scale.value;
     });
+
+  // Show loading state while preferences are loading
+  if (isLoadingPreferences) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -132,7 +209,7 @@ export const CameraView = ({
               <Animated.View style={[styles.durationOptions, animations.dropdownAnimatedStyle]}>
                 <TouchableOpacity 
                   style={[styles.durationOption, dailiesDuration === '12h' && styles.durationOptionActive]}
-                  onPress={() => onSelectDuration('12h')}
+                  onPress={() => handleSelectDuration('12h')}
                 >
                   <Text style={[styles.durationOptionText, dailiesDuration === '12h' && styles.durationOptionTextActive]}>
                     12h
@@ -140,7 +217,7 @@ export const CameraView = ({
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={[styles.durationOption, dailiesDuration === '24h' && styles.durationOptionActive]}
-                  onPress={() => onSelectDuration('24h')}
+                  onPress={() => handleSelectDuration('24h')}
                 >
                   <Text style={[styles.durationOptionText, dailiesDuration === '24h' && styles.durationOptionTextActive]}>
                     24h
@@ -175,8 +252,6 @@ export const CameraView = ({
         </View>
       </View>
 
-
-
       {/* Bottom controls */}
       <View style={styles.bottomControlsContainer}>
         <View style={styles.bottomControls}>
@@ -210,8 +285,9 @@ export const CameraView = ({
   );
 };
 
-// Updated styles
+// styles
 const styles = {
+
   container: {
     flex: 1,
     backgroundColor: '#000000',
@@ -244,8 +320,8 @@ const styles = {
   },
   settingsDropdown: {
     position: 'absolute',
-    top: 80,
-    right: 16,
+    top: 65,
+    right: 25,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     backdropFilter: 'blur(20px)',
     borderRadius: 16,
@@ -437,4 +513,17 @@ const styles = {
   switchButtonDisabled: {
     opacity: 0.5,
   },
+
+
+    loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+  },
+  loadingText: {
+    color: '#ffffff',
+    fontSize: 16,
+  },
+
 };

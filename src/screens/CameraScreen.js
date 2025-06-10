@@ -28,9 +28,8 @@ export default function CameraScreen({ onBack, onNavbarToggle }) {
   const [zoom, setZoom] = useState(0);
   const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
   
-  // Settings state
+  // Settings state - removed dailiesDuration since it's now handled in CameraView
   const [showSettings, setShowSettings] = useState(false);
-  const [dailiesDuration, setDailiesDuration] = useState('12h');
   const [showDurationDropdown, setShowDurationDropdown] = useState(false);
   
   const [permission, requestPermission] = useCameraPermissions();
@@ -116,7 +115,6 @@ export default function CameraScreen({ onBack, onNavbarToggle }) {
     setShowSettings,
     showDurationDropdown,
     setShowDurationDropdown,
-    setDailiesDuration,
   });
 
   // Camera permission and device validation
@@ -195,7 +193,7 @@ export default function CameraScreen({ onBack, onNavbarToggle }) {
   const handlePostToDailies = () => {
     if (capturedImages.length === 0 || isVirtualDevice) return;
     
-    console.log(`Posting ${capturedImages.length} images to dailies with duration ${dailiesDuration}:`, capturedImages);
+    console.log(`Posting ${capturedImages.length} images to dailies:`, capturedImages);
     console.log(`Audience: ${audienceMode}`);
     
     // Reset states and go back
@@ -257,7 +255,6 @@ export default function CameraScreen({ onBack, onNavbarToggle }) {
         setPostMode={setPostMode}
         audienceMode={audienceMode}
         setAudienceMode={setAudienceMode}
-        dailiesDuration={dailiesDuration}
         onAddMore={handleAddMore}
         onAddNewImage={handleAddNewImage} // New prop for adding images
         onRemoveImage={handleRemoveImage} // New prop for removing images
@@ -282,7 +279,6 @@ export default function CameraScreen({ onBack, onNavbarToggle }) {
         postMode={postMode}
         setPostMode={setPostMode}
         showSettings={showSettings}
-        dailiesDuration={dailiesDuration}
         showDurationDropdown={showDurationDropdown}
         scale={scale}
         savedScale={savedScale}
@@ -291,7 +287,6 @@ export default function CameraScreen({ onBack, onNavbarToggle }) {
         onSwitchCamera={cameraLogic.switchCamera}
         onToggleSettings={animations.toggleSettings}
         onToggleDurationDropdown={animations.toggleDurationDropdown}
-        onSelectDuration={animations.selectDuration}
         animations={animations}
         isCapturing={isCapturing}
       />
