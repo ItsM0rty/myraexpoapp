@@ -118,7 +118,7 @@ export const PostCaptureScreen = ({
             <Text style={styles.descriptionLabel}>Add a description</Text>
             <TextInput
               style={styles.descriptionInput}
-              placeholder="What's on your mind?"
+              placeholder="Whaddya think?"
               placeholderTextColor="rgba(255, 255, 255, 0.5)"
               value={postDescription}
               onChangeText={setPostDescription}
@@ -314,9 +314,12 @@ const styles = {
     borderColor: 'rgba(255, 255, 255, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
+
   },
   descriptionContainer: {
     gap: 8,
+    marginTop: 12,
+
   },
   descriptionLabel: {
     color: '#ffffff',
@@ -425,7 +428,7 @@ const styles = {
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 20,
   },
   singlePostButtonText: {
     color: '#000000',
