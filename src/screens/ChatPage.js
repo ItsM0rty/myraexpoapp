@@ -88,9 +88,9 @@ export default function ChatPage({ onNavbarToggle }) {
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Chats</Text>
+          <Text style={styles.headerTitle}>Convos</Text>
           <TouchableOpacity>
-            <Text style={styles.newChatButton}>New Chat</Text>
+            <Text style={styles.newChatButton}>New Convo</Text>
           </TouchableOpacity>
         </View>
       </View>
