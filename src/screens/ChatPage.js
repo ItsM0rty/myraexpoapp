@@ -13,7 +13,7 @@ import {
 import { 
   ChevronRight, 
   MoreHorizontal, 
-  Send 
+  Send, PlusCircleIcon
 } from 'lucide-react-native';
 
 export default function ChatPage({ onNavbarToggle }) {
@@ -90,7 +90,7 @@ export default function ChatPage({ onNavbarToggle }) {
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Convos</Text>
           <TouchableOpacity>
-            <Text style={styles.newChatButton}>New Convo</Text>
+            <PlusCircleIcon style={styles.newChatButton}/>
           </TouchableOpacity>
         </View>
       </View>
@@ -251,14 +251,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
     color: '#FFFFFF',
+    fontFamily: 'SF-Pro-Display-Heavy',
+    
+
   },
   newChatButton: {
-    color: '#3B82F6',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
+    color: '#3B82F6',  },
+
   chatList: {
     flex: 1,
   },

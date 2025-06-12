@@ -10,7 +10,7 @@ import {
   Animated,
   Modal,
   StatusBar,
-  TouchableWithoutFeedback, // Added TouchableWithoutFeedback
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -20,7 +20,7 @@ import {
   ArrowLeft,
   Blend,
 } from 'lucide-react-native';
-import PostCard from '../components/PostCard'; // Assuming PostCard.js is in ../components/
+import PostCard from '../components/PostCard';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -30,7 +30,6 @@ export default function ProfilePage() {
   const [selectedPostIndex, setSelectedPostIndex] = useState(0);
   const [pressTimer, setPressTimer] = useState(null);
   const [isScrolling, setIsScrolling] = useState(false);
-  // const [feedReady, setFeedReady] = useState(false); // feedReady seems unused, can be removed if not needed elsewhere
   const [lastTapTime, setLastTapTime] = useState(0);
 
   const feedScrollRef = useRef(null);
@@ -125,9 +124,8 @@ export default function ProfilePage() {
 
   const sortedPosts = [...userPosts].sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated));
 
-  const POST_HEIGHT = 580; // Used for scrolling in feed
-  const POST_GAP = 12; // Used for scrolling in feed
-  // const HEADER_HEIGHT = 70; // Seems unused
+  const POST_HEIGHT = 580;
+  const POST_GAP = 12;
 
   const handleScroll = useCallback(() => {
     setIsScrolling(true);
@@ -144,22 +142,18 @@ export default function ProfilePage() {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
-      // Clear pressTimer on unmount as well
       if (pressTimer) {
         clearTimeout(pressTimer);
       }
     };
-  }, [pressTimer]); // Added pressTimer to dependency array for cleanup
+  }, [pressTimer]);
 
-  const handlePostPress = useCallback((post) => { // Index not needed here
+  const handlePostPress = useCallback((post) => {
     if (isScrolling) return;
 
     const timer = setTimeout(() => {
-      // Check if the press is still active (e.g. selectedPost is still null or pressTimer hasn't been cleared by a release)
-      // This check helps prevent setting state if the user released just before the timer fired.
-      // However, with the current logic, if timer fires, it means a hold.
       setSelectedPost(post);
-      didHoldOccurRef.current = true; // Mark that a hold action has completed
+      didHoldOccurRef.current = true;
 
       previewOpacity.setValue(0);
       previewScale.setValue(0.8);
@@ -179,27 +173,22 @@ export default function ProfilePage() {
       ]).start();
     }, 400); 
     setPressTimer(timer);
-  }, [isScrolling, previewOpacity, previewScale]); // Added previewOpacity, previewScale to deps
+  }, [isScrolling, previewOpacity, previewScale]);
 
   const handlePostRelease = useCallback(() => {
     if (pressTimer) {
       clearTimeout(pressTimer);
       setPressTimer(null);
     }
-    // didHoldOccurRef is reset at the beginning of a new onPressIn
   }, [pressTimer]);
 
   const handlePostClick = useCallback((post, index) => {
-    // The check for didHoldOccurRef.current is now done in the onPress handler directly.
-    // So, if handlePostClick is called, it means a tap (not a hold) is intended.
-
     if (isScrolling) return;
 
     const currentTime = Date.now();
-    if (currentTime - lastTapTime < 300) return; // Debounce
+    if (currentTime - lastTapTime < 300) return;
     setLastTapTime(currentTime);
 
-    // This clear is still important: if user taps very quickly *before* hold timer fires.
     if (pressTimer) {
       clearTimeout(pressTimer);
       setPressTimer(null);
@@ -218,7 +207,6 @@ export default function ProfilePage() {
             y: targetY,
             animated: false
           });
-          // setFeedReady(true); // feedReady seems unused
         }
       }, 100);
       return () => clearTimeout(timer);
@@ -226,7 +214,7 @@ export default function ProfilePage() {
   }, [showPostsFeed, selectedPostIndex]);
 
   const closeModal = useCallback(() => {
-    if (!selectedPost) return; // Check if a post is actually selected
+    if (!selectedPost) return;
 
     Animated.parallel([
       Animated.timing(previewOpacity, {
@@ -242,15 +230,14 @@ export default function ProfilePage() {
     ]).start(() => {
       setSelectedPost(null);
     });
-  }, [selectedPost, previewOpacity, previewScale]); // Added deps
+  }, [selectedPost, previewOpacity, previewScale]);
 
   const closeFeed = useCallback(() => {
     setShowPostsFeed(false);
-    // setFeedReady(false); // feedReady seems unused
   }, []);
 
   const renderGridPost = useCallback((post, index) => {
-    const gridItemWidth = (screenWidth - 24) / 2; // 8 (paddingHorizontal) * 2 + 8 (gap) = 24
+    const gridItemWidth = (screenWidth - 24) / 2;
     const gridItemHeight = gridItemWidth * 1.33;
 
     return (
@@ -258,21 +245,18 @@ export default function ProfilePage() {
         key={post.id}
         style={[styles.gridItem, { width: gridItemWidth, height: gridItemHeight }]}
         onPressIn={() => {
-          didHoldOccurRef.current = false; // Reset for new press interaction
-          handlePostPress(post); // Pass only post, index not used by handlePostPress
+          didHoldOccurRef.current = false;
+          handlePostPress(post);
         }}
         onPressOut={handlePostRelease}
         onPress={() => {
-          // If a hold action was already triggered and successfully showed the preview,
-          // we don't want to also trigger the click action.
           if (didHoldOccurRef.current) {
             return;
           }
           handlePostClick(post, index);
         }}
         activeOpacity={0.7}
-        delayPressIn={0} // Important for immediate onPressIn
-        // delayPressOut={0} // Default is 0, not strictly needed
+        delayPressIn={0}
       >
         <Image
           source={{ uri: post.images[0] }}
@@ -288,10 +272,10 @@ export default function ProfilePage() {
         )}
       </TouchableOpacity>
     );
-  }, [handlePostPress, handlePostRelease, handlePostClick]); // Dependencies for renderGridPost
+  }, [handlePostPress, handlePostRelease, handlePostClick]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
       <ScrollView
@@ -299,7 +283,7 @@ export default function ProfilePage() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
-        scrollEventThrottle={16} // Good for onScroll performance
+        scrollEventThrottle={16}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -400,18 +384,17 @@ export default function ProfilePage() {
       {/* Hold Preview Modal - Fixed to show full PostCard */}
       <Modal
         visible={selectedPost !== null}
-        animationType="none" // Using custom Animated opacity/scale
+        animationType="none"
         transparent={true}
         onRequestClose={closeModal}
         statusBarTranslucent={true}
       >
         <TouchableOpacity
-          style={styles.previewModal} // This TouchableOpacity acts as the modal background
-          activeOpacity={1} // To make the background fully opaque to touches
-          onPress={closeModal} // Close modal if background is tapped
+          style={styles.previewModal}
+          activeOpacity={1}
+          onPress={closeModal}
         >
-          {/* Wrap content in a non-TouchableOpacity View to prevent press propagation if content is tapped */}
-          <TouchableWithoutFeedback onPress={() => { /* Do nothing to prevent closing when tapping on card */}}>
+          <TouchableWithoutFeedback onPress={() => {}}>
             <Animated.View
               style={[
                 styles.previewContainer,
@@ -439,9 +422,10 @@ export default function ProfilePage() {
           </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {

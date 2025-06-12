@@ -288,6 +288,7 @@ export default function HomeFeed() {
         </View>
       </View>
 
+
       {/* Content area with PagerView - handles all swiping */}
       <AnimatedPagerView
         ref={pagerRef}
@@ -337,8 +338,8 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     alignItems: 'center',
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
   tabSelector: {
     flexDirection: 'row',
@@ -378,8 +379,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontFamily: 'SF-Pro-Display-Semibold',
+    
   },
   pagerView: {
     flex: 1,
