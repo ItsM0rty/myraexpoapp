@@ -157,10 +157,7 @@ const SignupScreen = ({ onSignupSuccess, onNavigateToLogin }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (formData.username) {
-        // Temporarily skip username check due to permission issues
-        console.log('Skipping username check - setting as available');
-        setUsernameAvailable(true);
-        // checkUsernameAvailability(formData.username);
+        checkUsernameAvailability(formData.username);
       }
     }, 500);
 
