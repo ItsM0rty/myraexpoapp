@@ -1,0 +1,15 @@
+{
+  "name": "myra-appwrite-functions",
+  "version": "1.0.0",
+  "description": "Appwrite Cloud Functions for Myra App",
+  "main": "index.js",
+  "dependencies": {
+    "node-appwrite": "^13.0.1"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": ["appwrite", "cloud-function", "myra", "user-management"],
+  "author": "",
+  "license": "MIT"
+} 
