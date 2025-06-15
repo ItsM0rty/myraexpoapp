@@ -111,13 +111,14 @@ const SignupScreen = ({ onSignupSuccess, onNavigateToLogin }) => {
       console.log('Checking username availability for:', username);
       
       // Call Cloud Function to check username availability
-      const response = await fetch('https://fra.cloud.appwrite.io/v1/functions/YOUR_USERNAME_CHECK_FUNCTION_ID/executions', {
+      const response = await fetch('https://fra.cloud.appwrite.io/v1/functions/684ee1650012bb0814ea/executions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Appwrite-Project': '6847aae80036323aa42a',
         },
         body: JSON.stringify({
+          action: 'checkUsername',
           username: username
         }),
       });
@@ -367,13 +368,14 @@ const SignupScreen = ({ onSignupSuccess, onNavigateToLogin }) => {
       console.log('Account name updated successfully');
 
       // Call Cloud Function to create user document
-      const response = await fetch('https://fra.cloud.appwrite.io/v1/functions/YOUR_FUNCTION_ID/executions', {
+      const response = await fetch('https://fra.cloud.appwrite.io/v1/functions/684ee1650012bb0814ea/executions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Appwrite-Project': '6847aae80036323aa42a',
         },
         body: JSON.stringify({
+          action: 'createUser',
           userId: formData.userId,
           username: formData.username,
           name: formData.name,
