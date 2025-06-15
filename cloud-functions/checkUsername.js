@@ -1,17 +1,32 @@
 const { Client, Databases, Query } = require('node-appwrite');
 
 module.exports = async (req, res) => {
-  // Initialize the Appwrite client with API key
-  const client = new Client()
-    .setEndpoint('https://fra.cloud.appwrite.io/v1')
-    .setProject('6847aae80036323aa42a')
-    .setKey(process.env.APPWRITE_API_KEY);
-
-  const databases = new Databases(client);
-
   try {
-    // Get the request data
-    const { username } = JSON.parse(req.payload);
+    // Initialize the Appwrite client with API key
+    const client = new Client()
+      .setEndpoint('https://fra.cloud.appwrite.io/v1')
+      .setProject('6847aae80036323aa42a')
+      .setKey(process.env.APPWRITE_API_KEY);
+
+    const databases = new Databases(client);
+
+    // Handle different payload formats
+    let requestData;
+    try {
+      if (typeof req.payload === 'string') {
+        requestData = JSON.parse(req.payload);
+      } else {
+        requestData = req.payload;
+      }
+    } catch (parseError) {
+      console.error('Failed to parse payload:', parseError);
+      return res.json({
+        success: false,
+        error: 'Invalid JSON payload'
+      }, 400);
+    }
+
+    const { username } = requestData;
 
     console.log('Checking username availability:', username);
 
@@ -42,6 +57,7 @@ module.exports = async (req, res) => {
     if (existingUsers.documents.length > 0) {
       return res.json({
         success: false,
+        available: false,
         error: 'Username is already taken'
       }, 409);
     }
@@ -59,4 +75,4 @@ module.exports = async (req, res) => {
       error: error.message || 'Internal server error'
     }, 500);
   }
-}; 
+};
