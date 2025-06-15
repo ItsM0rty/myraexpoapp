@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, StatusBar, Platform, Text, TextInput } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Home, Search, MessageCircle, User, ScanFace } from 'lucide-react-native';
@@ -11,7 +11,11 @@ import SearchPage from './src/screens/SearchPage';
 import CameraScreen from './src/screens/CameraScreen';
 import ChatPage from './src/screens/ChatPage';
 import ProfilePage from './src/screens/ProfilePage';
+import LoginScreen from './src/screens/LoginScreen';
+import SignupScreen from './src/components/loginComponents/SignupScreen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+import { account } from './lib/constants/appwrite';
 
 // Keep splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();
@@ -28,7 +32,10 @@ TextInput.defaultProps = defaultTextInputProps;
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [showNavbar, setShowNavbar] = useState(true);
-// myraExpoApp\assets\fonts\sf\SF-Pro-Display-Black.otf
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [authScreen, setAuthScreen] = useState('login'); // 'login' or 'signup'
+
   // Load SF Pro Display fonts
   const [fontsLoaded] = useFonts({
     'SF-Pro-Display-Black': require('./assets/fonts/sf/SF-Pro-Display-Black.otf'),
@@ -43,14 +50,83 @@ export default function App() {
     'SF-Pro-Display-Ultralight': require('./assets/fonts/sf/SF-Pro-Display-Ultralight.otf'),
   });
 
-  React.useEffect(() => {
+  // Check authentication status
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
+  useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) {
-    return null; // Keep splash screen visible while fonts load
+  const checkAuthStatus = async () => {
+    try {
+      const user = await account.get();
+      if (user) {
+        setIsAuthenticated(true);
+      }
+    } catch (error) {
+      console.log('Not authenticated:', error.message);
+      setIsAuthenticated(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLoginSuccess = () => {
+    setIsAuthenticated(true);
+    setAuthScreen('login'); // Reset to login screen for next time
+  };
+
+  const handleSignupSuccess = () => {
+    setIsAuthenticated(true);
+    setAuthScreen('login'); // Reset to login screen for next time
+  };
+
+  const handleNavigateToSignup = () => {
+    setAuthScreen('signup');
+  };
+
+  const handleNavigateToLogin = () => {
+    setAuthScreen('login');
+  };
+
+  const handleLogout = async () => {
+    try {
+      await account.deleteSession('current');
+      setIsAuthenticated(false);
+      setActiveTab('home'); // Reset to home tab
+      setAuthScreen('login'); // Reset to login screen
+    } catch (error) {
+      console.log('Logout error:', error.message);
+    }
+  };
+
+  if (!fontsLoaded || isLoading) {
+    return null; // Keep splash screen visible while fonts load or checking auth
+  }
+
+  // Show authentication screens if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          {authScreen === 'login' ? (
+            <LoginScreen 
+              onLoginSuccess={handleLoginSuccess}
+              onNavigateToSignup={handleNavigateToSignup}
+            />
+          ) : (
+            <SignupScreen 
+              onSignupSuccess={handleSignupSuccess}
+              onNavigateToLogin={handleNavigateToLogin}
+            />
+          )}
+        </GestureHandlerRootView>
+      </SafeAreaProvider>
+    );
   }
 
   const renderContent = () => {
@@ -59,7 +135,7 @@ export default function App() {
       case 'search': return <SearchPage />;
       case 'create': return <CameraScreen onNavbarToggle={setShowNavbar}/>;
       case 'chat': return <ChatPage onNavbarToggle={setShowNavbar} />;
-      case 'profile': return <ProfilePage />;
+      case 'profile': return <ProfilePage onLogout={handleLogout} />; // Pass logout function
       default: return null;
     }
   };
