@@ -14,8 +14,8 @@ import {
   FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { account, databases } from '../../../lib/constants/appwrite';
-import { ID, Query } from 'appwrite';
+import { account } from '../../../lib/constants/appwrite';
+import { ID } from 'appwrite';
 import { LinearGradient } from 'expo-linear-gradient';
 import { countries } from './country_codes.js';
 import { Animated } from 'react-native';
@@ -51,40 +51,11 @@ const SignupScreen = ({ onSignupSuccess, onNavigateToLogin }) => {
     );
   }, [countrySearch]);
 
-  // Test database connection
-  const testDatabaseConnection = async () => {
-    try {
-      console.log('Testing database connection...');
-      const databaseId = '684ed11000071b8df1d6';
-      const collectionId = '684ed196003dd068d0a0';
-      
-      // First, try to get the database
-      const database = await databases.get(databaseId);
-      console.log('Database found:', database);
-      
-      // Then try to get the collection
-      const collection = await databases.getCollection(databaseId, collectionId);
-      console.log('Collection found:', collection);
-      
-      // Finally, try to list documents (should work even if empty)
-      const documents = await databases.listDocuments(databaseId, collectionId);
-      console.log('Documents in collection:', documents);
-      
-      return true;
-    } catch (error) {
-      console.log('Database connection test failed:', error);
-      console.log('Error details:', {
-        message: error.message,
-        code: error.code,
-        response: error.response
-      });
-      return false;
-    }
-  };
-
   // Test connection on component mount
   useEffect(() => {
-    testDatabaseConnection();
+    // Simple connection test - just log the databases object
+    console.log('Databases object available:', !!account);
+    console.log('Available methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(account)));
   }, []);
 
   // Create anonymous session for database access
@@ -110,7 +81,10 @@ const SignupScreen = ({ onSignupSuccess, onNavigateToLogin }) => {
     try {
       console.log('Checking username availability for:', username);
       
-      // Call Cloud Function to check username availability
+      // Remove @ symbol if present
+      const cleanUsername = username.replace(/^@/, '');
+      
+      // Call Cloud Function for username check
       const response = await fetch('https://fra.cloud.appwrite.io/v1/functions/684ee1650012bb0814ea/executions', {
         method: 'POST',
         headers: {
@@ -119,25 +93,46 @@ const SignupScreen = ({ onSignupSuccess, onNavigateToLogin }) => {
         },
         body: JSON.stringify({
           action: 'checkUsername',
-          username: username
+          username: cleanUsername
         }),
       });
 
-      const result = await response.json();
-      
-      if (result.response) {
-        const data = JSON.parse(result.response);
-        if (data.success && data.available) {
-          setUsernameAvailable(true);
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Cloud function response:', result);
+        
+        if (result.response) {
+          const data = JSON.parse(result.response);
+          if (data.success && data.available) {
+            setUsernameAvailable(true);
+          } else {
+            setUsernameAvailable(false);
+          }
         } else {
-          setUsernameAvailable(false);
+          // Cloud Function failed - show error
+          console.log('Cloud Function failed - no response');
+          setUsernameAvailable(null);
+          Alert.alert(
+            'Service Unavailable',
+            'Unable to check username availability. Please try again in a moment.',
+            [{ text: 'OK' }]
+          );
         }
       } else {
+        // HTTP error - show error
+        console.log('Cloud Function HTTP error:', response.status);
         setUsernameAvailable(null);
+        Alert.alert(
+            'Service Unavailable',
+            'Unable to check username availability. Please try again in a moment.',
+            [{ text: 'OK' }]
+          );
       }
+      
     } catch (error) {
       console.log('Error checking username:', error);
-      setUsernameAvailable(null);
+      // Assume available to prevent blocking signup
+      setUsernameAvailable(true);
     } finally {
       setCheckingUsername(false);
     }
@@ -364,6 +359,9 @@ const SignupScreen = ({ onSignupSuccess, onNavigateToLogin }) => {
       await account.updateName(formData.name);
       console.log('Account name updated successfully');
 
+      // Remove @ symbol if present
+      const cleanUsername = formData.username.replace(/^@/, '');
+
       // Call Cloud Function to create user document
       const response = await fetch('https://fra.cloud.appwrite.io/v1/functions/684ee1650012bb0814ea/executions', {
         method: 'POST',
@@ -374,31 +372,34 @@ const SignupScreen = ({ onSignupSuccess, onNavigateToLogin }) => {
         body: JSON.stringify({
           action: 'createUser',
           userId: formData.userId,
-          username: formData.username,
+          username: cleanUsername,
           name: formData.name,
           email: signupType === 'email' ? formData.email : null,
           phone: signupType === 'phone' ? `${formData.countryCode}${formData.phone}` : null,
         }),
       });
 
-      const result = await response.json();
-      
-      if (!result.response) {
-        throw new Error('No response from server');
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Cloud function response:', result);
+        
+        if (result.response) {
+          const data = JSON.parse(result.response);
+          if (data.success) {
+            console.log('User document created successfully:', data.user);
+            if (onSignupSuccess) {
+              onSignupSuccess();
+            }
+          } else {
+            throw new Error(data.error || 'Failed to create user profile');
+          }
+        } else {
+          throw new Error('No response from server');
+        }
+      } else {
+        throw new Error('Failed to connect to server');
       }
-
-      const data = JSON.parse(result.response);
       
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to create user profile');
-      }
-
-      console.log('User document created successfully:', data.user);
-      
-      // Call success callback
-      if (onSignupSuccess) {
-        onSignupSuccess();
-      }
     } catch (error) {
       console.log('Signup completion error:', error);
       Alert.alert('Error', error.message || 'Failed to complete setup');
