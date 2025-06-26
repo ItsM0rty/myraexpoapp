@@ -4,6 +4,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Home, Search, MessageCircle, User, ScanFace } from 'lucide-react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import * as SecureStore from 'expo-secure-store'; // Added for session storage
 
 import NavIcon from './src/components/NavIcon';
 import HomeFeed from './src/screens/HomeFeed';
@@ -15,7 +16,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/components/loginComponents/SignupScreen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { account } from './lib/constants/appwrite';
+import { account, client } from './lib/constants/appwrite'; // Updated to include client
 
 // Keep splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();
@@ -50,30 +51,46 @@ export default function App() {
     'SF-Pro-Display-Ultralight': require('./assets/fonts/sf/SF-Pro-Display-Ultralight.otf'),
   });
 
-  // Check authentication status
+  // Restore session and check authentication status
+
+
+
   useEffect(() => {
-    checkAuthStatus();
-  }, []);
+  const restoreSessionAndCheckAuth = async () => {
+    try {
+      if (!client) {
+        throw new Error('Appwrite client is not initialized');
+      }
+      // Restore session from secure store
+      const sessionId = await SecureStore.getItemAsync('appwrite-session');
+      if (!sessionId) {
+        console.log('No session found, user is unauthenticated');
+        setIsAuthenticated(false);
+        setIsLoading(false);
+        return;
+      }
+      client.setSession(sessionId);
+      // Check authentication status
+      const user = await account.get();
+      setIsAuthenticated(true);
+    } catch (error) {
+      console.error('Authentication check error:', error.message);
+      setIsAuthenticated(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  restoreSessionAndCheckAuth();
+}, []);
+
+
+
 
   useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
-
-  const checkAuthStatus = async () => {
-    try {
-      const user = await account.get();
-      if (user) {
-        setIsAuthenticated(true);
-      }
-    } catch (error) {
-      console.log('Not authenticated:', error.message);
-      setIsAuthenticated(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
@@ -96,6 +113,7 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await account.deleteSession('current');
+      await SecureStore.deleteItemAsync('appwrite-session'); // Clear stored session
       setIsAuthenticated(false);
       setActiveTab('home'); // Reset to home tab
       setAuthScreen('login'); // Reset to login screen

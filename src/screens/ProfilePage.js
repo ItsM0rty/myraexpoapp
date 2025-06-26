@@ -306,7 +306,7 @@ export default function ProfilePage() {
           <View style={styles.bioContainer}>
             <Text style={styles.userName}>Suyash Bhattarai</Text>
             <Text style={styles.bioText}>
-              non-practicing intellectual;{'\n'}v wholesome individual;
+              non-practicing intellectual;  
             </Text>
           </View>
 
